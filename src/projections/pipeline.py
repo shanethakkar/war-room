@@ -19,7 +19,6 @@ from src.formats import get_format
 from src.formats.score import score_components
 from src.projections import MODELS
 from src.projections.baseline.project import project_season
-from src.projections.bayesian.project import bayesian_project_season
 from src.projections.uncertainty import (
     add_intervals,
     collect_residuals,
@@ -48,6 +47,9 @@ def scored_projection(
         raise ValueError(f"Unknown model {model!r}; choose from {MODELS}.")
 
     if model == "bayesian":
+        # Lazy import: keeps the baseline/API path free of the optional pymc extra.
+        from src.projections.bayesian.project import bayesian_project_season
+
         return bayesian_project_season(panel, players, season, **(bayes_kwargs or {}))
 
     projection = score_components(
