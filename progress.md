@@ -4,8 +4,9 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Scaffold is in place (uv project, `src/` skeleton, tooling, CI
-gates green). Next up is the data ingestion layer (`src/ingest`).
+**Current focus:** Ingestion layer done — 10 nflverse tables cached to Parquet
+(2016–2025, ~142 MB, offline-reproducible). Next up is the feature panel
+(`src/features`).
 **Last updated:** 2026-07-10
 
 ---
@@ -41,11 +42,35 @@ reverse these.
   extra so the baseline stack stays light and never depends on it.
 - **(2026-07-10) GitHub:** `github.com/shanethakkar/war-room`; push after each
   milestone.
+- **(2026-07-10) Toolchain pinned to Python 3.12.** `requires-python >=3.12`,
+  ruff `py312`, mypy `python_version 3.12`. numpy 2.5 stubs use 3.12-only `type`
+  syntax, so straddling 3.11 broke mypy; we develop/run on 3.12 anyway.
+- **(2026-07-10) Ingestion = a table registry.** `src/ingest/sources.py` maps a
+  stable cache name → nflreadpy loader (seasoned / all-history / reference). Cache
+  I/O isolated in `cache.py`; `refresh.py` orchestrates + is the CLI. Per-table
+  failures are reported, not fatal. Adding a table = one registry entry.
+- **(2026-07-10) End of window via `nflreadpy.get_current_season()`** (date-based,
+  no network), so the window auto-extends each season. Resolved to 2016–2025 now.
+
+### Gotchas
+
+- **Windows stdout is cp1252.** Non-cp1252 chars (e.g. `→` U+2192) raise
+  `UnicodeEncodeError` at runtime; even cp1252 chars (em-dash) render as `�` in the
+  console. **Keep all runtime `print`/CLI output ASCII-only.** (Source files are
+  UTF-8 and fine.)
+- **`season` dtype is inconsistent across tables.** `ff_opportunity.season` is a
+  **string** (`'2016'`) while `pbp.season` / `snap_counts.season` are **ints**.
+  The feature layer must normalize the join key (cast to int) before merging.
 
 ## Open questions
 
-- Exact nflreadpy function names for snap counts + draft capital — verify against
-  docs during ingestion scaffold.
+- ~~Exact nflreadpy function names for snap counts + draft capital.~~ **RESOLVED
+  (2026-07-10):** `load_snap_counts(seasons=...)` (PFR, since 2012) and
+  `load_draft_picks(seasons=...)` (since 1980). Both cached.
+- Route participation source: `load_snap_counts` gives snap share but not routes.
+  Routes/route-participation (needed for target-share modeling, design.md §4.1)
+  likely come from `load_participation` / `load_nextgen_stats` — evaluate coverage
+  and recency when the feature layer needs them (not yet cached).
 - When (if ever) to relax the open-data rule for college data to improve rookies.
 - How thick the Next.js frontend should be in Phase 1 vs. batch reports.
 
@@ -56,7 +81,6 @@ reverse these.
 ### Phase 1 — Pre-draft research
 
 **Todo**
-- [ ] Ingestion (`src/ingest`): nflreadpy loaders → Parquet cache; `refresh` entrypoint. Verify snap-count + draft-capital function names.
 - [ ] Feature panel (`src/features`): player-season panel with volume / efficiency / opportunity features from weekly + pbp + ff_opportunity.
 - [ ] Format configs (`src/formats`): redraft PPR and superflex/2QB (scoring + roster/replacement rules).
 - [ ] Baseline projections (`src/projections/baseline`): top-down team environment → share allocation → regressed efficiency → expected-TD-based scoring.
@@ -81,6 +105,13 @@ reverse these.
   a real FastAPI app (`/health`, `/formats`), format configs (redraft PPR +
   superflex registry), and a smoke test. All gates green: ruff, mypy `--strict`,
   10/10 pytest.
+- [x] Ingestion layer (`src/ingest`): verified nflreadpy API (0.1.5), built a
+  table registry (`sources.py`) + Parquet cache I/O (`cache.py`) + orchestrating
+  CLI (`refresh.py`) with `--start/--end-season`, `--only`, `--list` and per-table
+  error handling. Pulled 10 tables for 2016–2025 into `data/cache` (~142 MB):
+  pbp (484k rows), player_stats week+season, ff_opportunity, snap_counts, rosters,
+  schedules, players, teams, draft_picks. 11 network-free tests; 21/21 pytest,
+  ruff + mypy green. `data/` gitignored (cache reproducible from `refresh`).
 
 ### Phase 2 — Live draft co-pilot (not started)
 - [ ] Live Sleeper draft sync + real-time board.
@@ -102,4 +133,6 @@ reverse these.
 - **2026-07-10** — Project scaffold landed. uv project + `src/` skeleton +
   tooling (ruff/mypy/pytest) all green; FastAPI app and format registry live.
   Repo initialized and pushed to `github.com/shanethakkar/war-room`.
-- _(add dated entries as milestones land, e.g. "2026-07-11 — ingestion layer runs, cache populated")_
+- **2026-07-10** — Ingestion layer runs, cache populated. 10 nflverse tables
+  cached for 2016–2025 (~142 MB) via `python -m src.ingest.refresh`; snap-count
+  and draft-capital loader names resolved. Toolchain pinned to Python 3.12.
