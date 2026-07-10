@@ -89,6 +89,20 @@ reverse these.
     (QB .71 / RB .75 / WR .73 / TE .74; rookies .64). Honest caveat: only marginally
     beats a naive last-season carry-forward (.716) on returning players — the edge
     must come from tuning + the ADP benchmark, which is the real scoreboard.
+- **(2026-07-10) Decision layer = VOR against format replacement level**
+  (`src/decision`). Dedicated + FLEX + SUPERFLEX starter allocation is greedy over
+  the best available; replacement level = best non-starter per position. The
+  **superflex QB edge falls out for free** (validated below): same projections,
+  swapping only the roster's superflex slot.
+  - **Replacement convention:** best non-starter at the position (the streamer),
+    so the marginal starter sits just above 0 VOR.
+  - **Tiers are PROVISIONAL (gap-based)**: a new positional tier starts where the
+    VOR drop to the next player exceeds `TIER_GAP`. This is a placeholder for the
+    intended **distribution-overlap tiers** (design.md §5), which require the
+    uncertainty layer (not built yet). Swap once intervals exist.
+  - Validated on real 2025: single-QB board leads with WR/RB (first QB at overall
+    #12); superflex vaults Lamar #12->#1 (VOR 84->160), Allen #14->#2. Top 4
+    superflex picks are QBs.
 
 ### Gotchas
 
@@ -120,9 +134,9 @@ reverse these.
 
 **Todo**
 - [ ] Uncertainty (baseline): empirical residual spread by role/position → intervals.
+- [ ] Overlap-based tiers: replace the provisional gap-based tiers once intervals exist (design.md §5).
 - [ ] Aging curves: position-specific age adjustment (delta method); add + re-backtest (must beat no-aging).
 - [ ] Tune shrinkage `k` constants + recency decay against the ADP backtest.
-- [ ] Decision layer (`src/decision`): VOR against format replacement level; distribution-overlap tiers.
 - [ ] ADP arbitrage board: pull Sleeper ADP; rank by projection-vs-ADP disagreement.
 - [ ] Validation (`src/validation`): train-through-N / project-N+1 backtest; rank corr + MAE + calibration; ADP benchmark.
 - [ ] Minimal API (`src/api`) + thin Next.js view for the board.
@@ -142,6 +156,13 @@ reverse these.
   9 network-free tests (scoring, pooled priors, shrinkage, no-leakage, rookies);
   33/33 pytest, ruff + mypy `--strict` green. Validated leakage-free (Spearman
   0.721 overall on 2024). Aging deferred to a backtested enhancement.
+- [x] Decision layer (`src/decision`): replacement-level **VOR** with dedicated +
+  FLEX + SUPERFLEX starter allocation (`replacement.py`), provisional gap-based
+  positional tiers (`tiers.py`), and the assembled value board + CLI (`board.py`).
+  `python -m src.decision.board --season Y --format K` writes
+  `value_board_<fmt>_<season>.parquet` + prints top-N. 8 network-free tests
+  (allocation, VOR, superflex QB edge, tier gaps, board shape); 37/37 pytest,
+  ruff + mypy `--strict` green. **Superflex QB edge validated on real 2025 data.**
 - [x] `uv` project scaffold: `pyproject.toml` (light baseline deps + optional
   `bayesian` extra), `ruff`/`mypy`/`pytest` config, `.gitignore`, `README.md`,
   and the full `src/` skeleton per `design.md` §3 — layer packages with
@@ -195,3 +216,6 @@ reverse these.
 - **2026-07-10** — Baseline projection runs end-to-end. `python -m src.projections.run
   --season 2025` produces sane component projections scored per format; leakage-free
   backtest Spearman 0.721 (2024). The transparent benchmark the Bayesian model must beat.
+- **2026-07-10** — Decision layer (VOR + tiers) live. `python -m src.decision.board`
+  turns projections into a format-aware value board. Superflex QB edge demonstrated
+  on real data: Lamar Jackson #12 (single-QB) -> #1 (superflex), same projections.
