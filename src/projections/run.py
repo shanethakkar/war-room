@@ -15,12 +15,10 @@ import argparse
 
 import polars as pl
 
-from src.formats import FORMATS, get_format
-from src.formats.score import score_components
+from src.formats import FORMATS
 from src.ingest.cache import read_table, write_table
 from src.projections import MODELS
-from src.projections.baseline.project import project_season
-from src.projections.uncertainty import add_intervals, load_or_fit_interval_model
+from src.projections.pipeline import scored_projection
 
 
 def run(
@@ -28,24 +26,15 @@ def run(
 ) -> pl.DataFrame:
     """Produce a scored projection with prediction intervals for ``season``.
 
-    Projects format-agnostic component stats, scores them under ``fmt_key``, and
-    attaches an empirical prediction interval (design.md §5) - the distribution,
-    not just the point estimate.
+    Routes to the chosen model (baseline or bayesian); both emit a point estimate
+    and an 80% interval per player (design.md §5) - the distribution, not just the
+    point estimate.
     """
-    if model not in MODELS:
-        raise ValueError(f"Unknown model {model!r}; choose from {MODELS}.")
-    if model == "bayesian":
-        raise NotImplementedError(
-            "Bayesian backend not implemented yet - ship/beat the baseline first."
-        )
-
     panel = read_table("feature_panel")
     players = read_table("players")
-    projection = project_season(panel, players, season)
-    scored = score_components(projection, get_format(fmt_key))
-    scored = add_intervals(scored, load_or_fit_interval_model(panel, players)).sort(
-        "projected_points", descending=True
-    )
+    scored = scored_projection(
+        panel, players, season, model=model, fmt_key=fmt_key
+    ).sort("projected_points", descending=True)
     write_table(f"projections_{model}_{fmt_key}_{season}", scored)
     return scored
 

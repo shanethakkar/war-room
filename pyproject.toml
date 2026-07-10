@@ -26,7 +26,12 @@ dependencies = [
 # Swap-in hierarchical model. `uv sync --extra bayesian` to install.
 bayesian = [
     "pymc>=5.16.0",
-    "arviz>=0.18.0",
+    # arviz 1.x (DataTree migration) drops InferenceData/concat that pymc 5.26 imports.
+    "arviz>=0.18,<1.0",
+    # Fast Rust NUTS - far quicker to compile and sample than PyMC's default on
+    # Windows (the default made hierarchical fits take ~an hour). numba backend.
+    "nutpie>=0.13",
+    "numba>=0.60",
 ]
 
 [dependency-groups]

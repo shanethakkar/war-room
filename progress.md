@@ -4,11 +4,11 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Full Phase-1 pipeline is COMPLETE and **beats ADP**: ingest ->
-panel -> projection + calibrated intervals -> VOR board + tiers -> ADP-arbitrage
-board -> formal backtest. Leakage-free 2021–2024: our rank corr 0.515 vs ADP 0.455
-(beats ADP every season), forward calibration coverage 0.82. Next: the Bayesian
-model (must beat this baseline), plus aging/tuning refinements.
+**Current focus:** Full Phase-1 pipeline is COMPLETE and **beats ADP** (baseline:
+rank corr 0.515 vs ADP 0.455, forward calibration 0.82). The **Bayesian swap-in is
+built and validated but does NOT beat the baseline yet** (ties on ranking,
+under-covers) — baseline stays default per constraint #4. Next: the thin API +
+Next.js board, and/or improving the Bayesian model (games-variance) + tuning.
 **Last updated:** 2026-07-10
 
 ---
@@ -48,6 +48,22 @@ reverse these.
   0.455 (positive every season, +0.06 mean); forward calibration coverage 0.82;
   overall accuracy Spearman 0.71 / MAE ~45. Modest but consistent, with an
   untuned transparent model — the Bayesian layer and tuning have room to extend it.
+- **(2026-07-10) The v1 Bayesian model does NOT beat the baseline; baseline stays
+  default** (constraint #4). Head-to-head backtest 2021–2024 (redraft PPR):
+  - Ranking: rank corr 0.708 (baseline 0.710) — a tie; beat-ADP +0.047 (baseline
+    +0.060) — baseline marginally ahead.
+  - MAE 42.4 (baseline 44.9) — Bayesian slightly better on magnitude.
+  - **Calibration: coverage 0.65 vs baseline 0.82** — the Bayesian intervals are
+    too narrow. Diagnosed cause: it models points-*per-game* and multiplies by a
+    fixed games projection, so it misses **games/availability (injury) variance**,
+    the dominant source of season-total spread. The baseline's empirical residuals
+    capture it because they're fit on actual season totals.
+  - Verdict: the scoreboard did its job — a more complex model that doesn't beat
+    the transparent one does not ship as default. Bayesian is available via
+    `--model bayesian`; the fix (model games variance; possibly component-level
+    pooling) is queued.
+  - **Modeling deps** live in the optional `bayesian` extra: `pymc` (arviz pinned
+    `<1.0` — 1.x drops `InferenceData`), `nutpie` + `numba` (fast Rust NUTS).
 - **(2026-07-10) Project named "War Room."** Threaded into `README.md` and docs.
 - **(2026-07-10) Training window = 2016–present.** Modern pass-heavy era; keeps
   shares and aging curves on-regime without old rule/scheme eras. Encoded as
@@ -143,6 +159,11 @@ reverse these.
   `UnicodeEncodeError` at runtime; even cp1252 chars (em-dash) render as `�` in the
   console. **Keep all runtime `print`/CLI output ASCII-only.** (Source files are
   UTF-8 and fine.)
+- **PyMC's default NUTS is unusably slow here (no g++).** PyTensor can't compile C
+  (no g++ on this Windows box), so it falls back to Python-mode gradients and a
+  hierarchical fit took ~an hour. Fix: sample with **nutpie** (numba backend) -
+  ~40s. `fit_model` defaults to `nuts_sampler="nutpie"`. Also cap random effects to
+  established players (`MIN_PLAYER_SEASONS`) to keep the parameter space small.
 - **`season` dtype is inconsistent across tables.** `ff_opportunity.season` is a
   **string** (`'2016'`) while `pbp.season` / `snap_counts.season` are **ints**.
   The feature layer must normalize the join key (cast to int) before merging.
@@ -178,8 +199,7 @@ reverse these.
 - [ ] Tune shrinkage `k` constants + recency decay against the ADP backtest.
 - [ ] Investigate rookie conservatism vs ADP (biggest arbitrage fades); does it help or hurt the backtest?
 - [ ] Minimal API (`src/api`) + thin Next.js view for the board.
-- [ ] Bayesian projections (`src/projections/bayesian`): PyMC hierarchical (offense group level + partially-pooled player role + aging curves); posterior predictive intervals.
-- [ ] Prove Bayesian beats baseline on the scoreboard; make it the default only if it wins.
+- [ ] Improve the Bayesian model to actually beat the baseline (it currently ties on ranking and under-covers). Priority fix: model games/availability variance in the posterior predictive (multiplying ppg by fixed games misses the injury downside -> 65% coverage). Then re-backtest.
 
 **Doing**
 - (empty)
@@ -201,6 +221,16 @@ reverse these.
   `value_board_<fmt>_<season>.parquet` + prints top-N. 8 network-free tests
   (allocation, VOR, superflex QB edge, tier gaps, board shape); 37/37 pytest,
   ruff + mypy `--strict` green. **Superflex QB edge validated on real 2025 data.**
+- [x] Bayesian model (`src/projections/bayesian`): hierarchical PyMC ppg model -
+  partially-pooled player effects (established players only, for tractability),
+  position-varying slopes, position-specific aging (age/age^2 slopes), and
+  heteroscedastic Student-T; posterior-predictive intervals. Rookies reuse the
+  baseline draft-capital prior. Swap-in via `--model bayesian` behind a shared
+  `pipeline.scored_projection`. Sampled with **nutpie** (numba) - default PyMC NUTS
+  took ~an hour on this machine (no g++ -> Python-mode gradients); nutpie fits in
+  ~40s. `features` + guarded PyMC smoke tests. **Result: does NOT beat the baseline
+  (see decisions log) - baseline stays default.**
+
 - [x] Uncertainty layer (`src/projections/uncertainty.py`) + distribution-based
   tiers: leakage-free residual collection, scaled-residual quantiles bucketed by
   position x projection tier, `add_intervals`, in-sample coverage, cached
@@ -278,3 +308,7 @@ reverse these.
   board (`src.decision.arbitrage`) + formal backtest (`src.validation.backtest`) on
   FFC ADP. Leakage-free 2021–2024: our rank corr 0.515 vs ADP 0.455 (every season),
   forward calibration 0.82. ADP source moved Sleeper -> FFC (user-approved).
+- **2026-07-10** — Bayesian model (`src.projections.bayesian`) built as a `--model`
+  swap-in (hierarchical PyMC, nutpie sampler, ~40s/fit). Head-to-head: it does NOT
+  beat the baseline (ties on ranking; 0.65 vs 0.82 coverage). Baseline stays default;
+  the "baseline before Bayes" discipline held.

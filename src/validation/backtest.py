@@ -20,19 +20,13 @@ import argparse
 
 import polars as pl
 
-from src.formats import FORMATS, get_format
-from src.formats.base import ScoringConfig
-from src.formats.score import score_components
+from src.formats import FORMATS
 from src.ingest.adp import load_adp
 from src.ingest.cache import read_table
 from src.names import norm_name_expr
-from src.projections.baseline.project import project_season
-from src.projections.uncertainty import (
-    add_intervals,
-    collect_residuals,
-    default_seasons,
-    fit_interval_model,
-)
+from src.projections import MODELS
+from src.projections.pipeline import scored_projection
+from src.projections.uncertainty import default_seasons
 
 _REPORT_COLS: tuple[str, ...] = (
     "season",
@@ -59,16 +53,22 @@ def season_backtest(
     panel: pl.DataFrame,
     players: pl.DataFrame,
     year: int,
+    model: str,
     fmt_key: str,
-    scoring: ScoringConfig,
     residual_seasons: list[int],
+    bayes_kwargs: dict[str, int] | None = None,
 ) -> dict[str, object]:
     """Compute accuracy, calibration, and the ADP benchmark for one season."""
-    projection = score_components(project_season(panel, players, year), scoring)
+    projection = scored_projection(
+        panel,
+        players,
+        year,
+        model=model,
+        fmt_key=fmt_key,
+        interval_residual_seasons=residual_seasons or None,
+        bayes_kwargs=bayes_kwargs,
+    )
     coverage: float | None = None
-    if residual_seasons:
-        model = fit_interval_model(collect_residuals(panel, players, residual_seasons))
-        projection = add_intervals(projection, model)
 
     actual = panel.filter((pl.col("season") == year) & (pl.col("games") >= 1)).select(
         "player_id", pl.col("fantasy_points_ppr").alias("actual")
@@ -81,7 +81,7 @@ def season_backtest(
             (pl.col("projected_points") - pl.col("actual")).abs().mean()
         ).item()
     )
-    if residual_seasons and matched.height:
+    if matched.height:
         coverage = float(
             matched.select(
                 (
@@ -127,19 +127,21 @@ def backtest(
     panel: pl.DataFrame,
     players: pl.DataFrame,
     seasons: list[int],
+    model: str = "baseline",
     fmt_key: str = "redraft_ppr",
+    bayes_kwargs: dict[str, int] | None = None,
 ) -> pl.DataFrame:
     """Run the season-by-season backtest and return the per-season report."""
-    scoring = get_format(fmt_key).scoring
     projectable = set(default_seasons(panel))
     rows = [
         season_backtest(
             panel,
             players,
             year,
+            model,
             fmt_key,
-            scoring,
             sorted(s for s in projectable if s < year),
+            bayes_kwargs,
         )
         for year in seasons
     ]
@@ -157,19 +159,24 @@ def main() -> None:
     )
     parser.add_argument("--start", type=int, default=2021)
     parser.add_argument("--through", type=int, default=2024)
+    parser.add_argument("--model", choices=MODELS, default="baseline")
     parser.add_argument(
         "--format", dest="fmt_key", choices=sorted(FORMATS), default="redraft_ppr"
+    )
+    parser.add_argument(
+        "--draws", type=int, default=500, help="Bayesian sampler draws (per chain)."
     )
     args = parser.parse_args()
 
     panel = read_table("feature_panel")
     players = read_table("players")
     seasons = list(range(args.start, args.through + 1))
+    bayes_kwargs = {"draws": args.draws, "tune": args.draws}
     print(
-        f"[backtest] {args.fmt_key}: seasons {seasons[0]}-{seasons[-1]} "
+        f"[backtest] {args.model} {args.fmt_key}: seasons {seasons[0]}-{seasons[-1]} "
         f"(train strictly before each)"
     )
-    report = backtest(panel, players, seasons, args.fmt_key)
+    report = backtest(panel, players, seasons, args.model, args.fmt_key, bayes_kwargs)
     with pl.Config(
         tbl_rows=report.height, tbl_hide_dataframe_shape=True, tbl_width_chars=180
     ):
