@@ -58,8 +58,19 @@ reverse these.
   edge is illusory for drafting - rank corr weights the whole pool equally, but
   draft value lives in the top picks and positional allocation. **This is the real
   scoreboard now; improvements are gated on it, not rank corr.** (Adds `player_id`
-  to the value board so it joins to actuals.) Diagnosis of the 2024 collapse +
-  positional allocation is the next task.
+  to the value board so it joins to actuals.)
+  - **Diagnosis:** our board systematically **buries bounce-back players** (coming
+    off injury/limited seasons - JT 2024 our#93/ADP#10, Kyren #98/#16, Achane
+    #110/#22, Kupp) and **ascending youngsters/rookies** (Marvin Harrison Jr
+    #121/#14) because the projection is anchored to last season's box score. It
+    also **overrates TEs** (mean rank 72 vs ADP 101) and **underrates RBs** (97 vs
+    82). The market prices in offseason info (roles, recoveries, depth charts) that
+    a backward-looking model structurally lacks.
+  - **Tuning does NOT fix it:** swept LOOKBACK/DECAY against the draft-sim; best
+    (4, 0.9) helps 2024 (.33->.42) but overall win rate stays ~0.45. So it's ~PARITY
+    with ADP most years (≈0.49 ex-2024), not an edge - and closing the gap needs
+    more *signal* (depth charts, offseason moves, rookie landing spot), not tuning.
+    Strategic decision pending with the user.
 - **(2026-07-10) The v1 Bayesian model does NOT beat the baseline; baseline stays
   default** (constraint #4). Head-to-head backtest 2021–2024 (redraft PPR):
   - Ranking: rank corr 0.708 (baseline 0.710) — a tie; beat-ADP +0.047 (baseline
