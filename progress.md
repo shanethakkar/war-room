@@ -4,9 +4,9 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Ingestion layer done — 10 nflverse tables cached to Parquet
-(2016–2025, ~142 MB, offline-reproducible). Next up is the feature panel
-(`src/features`).
+**Current focus:** Feature panel done — 6,015 player-seasons x 55 features
+(2016–2025), validated against known finishes. Next up is baseline projections
+(`src/projections/baseline`). (Format configs already scaffolded.)
 **Last updated:** 2026-07-10
 
 ---
@@ -51,6 +51,23 @@ reverse these.
   failures are reported, not fatal. Adding a table = one registry entry.
 - **(2026-07-10) End of window via `nflreadpy.get_current_season()`** (date-based,
   no network), so the window auto-extends each season. Resolved to 2016–2025 now.
+- **(2026-07-10) Feature panel = one row per player-season, skill positions only**
+  (QB/RB/WR/TE via `position_group`). Pure transforms in `features/panel.py`, I/O
+  in `build.py`. Panel holds *current-season* actuals + context (not lagged);
+  lagging/feature-engineering for prediction belongs to the projection layer.
+  - Leans on nflverse-computed `target_share` / `air_yards_share` / `wopr` /
+    `fantasy_points_ppr` rather than re-deriving them.
+  - **Expected-TD backbone** from `ff_opportunity` (`*_touchdown_exp`), filtered to
+    regular season (`week <= 18`; it carries playoff weeks 19–22). Validated: the
+    expected-vs-actual TD gap flags regression candidates as intended.
+  - **Snap share** joined from `snap_counts` (keyed by `pfr_player_id`) via a
+    gsis<->pfr crosswalk from `players` (99.8% coverage). `offense_pct` is a 0–1
+    fraction.
+  - Efficiency rates use safe division (null, not 0/inf, on zero opportunity) so
+    shrinkage treats them as missing.
+  - Age = as of Sept 1 of the season; draft capital + `rookie_season` from
+    `players`. Left joins throughout (a production row is never dropped).
+  - Output cached as `feature_panel.parquet`.
 
 ### Gotchas
 
@@ -81,8 +98,6 @@ reverse these.
 ### Phase 1 — Pre-draft research
 
 **Todo**
-- [ ] Feature panel (`src/features`): player-season panel with volume / efficiency / opportunity features from weekly + pbp + ff_opportunity.
-- [ ] Format configs (`src/formats`): redraft PPR and superflex/2QB (scoring + roster/replacement rules).
 - [ ] Baseline projections (`src/projections/baseline`): top-down team environment → share allocation → regressed efficiency → expected-TD-based scoring.
 - [ ] Uncertainty (baseline): empirical residual spread by role/position → intervals.
 - [ ] Decision layer (`src/decision`): VOR against format replacement level; distribution-overlap tiers.
@@ -112,6 +127,14 @@ reverse these.
   pbp (484k rows), player_stats week+season, ff_opportunity, snap_counts, rosters,
   schedules, players, teams, draft_picks. 11 network-free tests; 21/21 pytest,
   ruff + mypy green. `data/` gitignored (cache reproducible from `refresh`).
+- [x] Feature panel (`src/features`): pure transforms (`panel.py`) + orchestrating
+  CLI (`build.py`, `--summary`) assembling **6,015 player-seasons x 55 features**
+  for 2016–2025 → `feature_panel.parquet`. Volume/role (targets, shares, snaps),
+  efficiency (safe-division rates), opportunity (expected TDs / expected pts from
+  ff_opportunity), context (age, draft capital, experience). Coverage: snap_share
+  99.8%, expected_pts 95.4%, age 100%. Validated against known 2024 finishes
+  (Chase/Lamar/rookies correct; expected-vs-actual TD gap behaves). 8 network-free
+  tests; 26/26 pytest, ruff + mypy `--strict` green.
 
 ### Phase 2 — Live draft co-pilot (not started)
 - [ ] Live Sleeper draft sync + real-time board.
@@ -136,3 +159,6 @@ reverse these.
 - **2026-07-10** — Ingestion layer runs, cache populated. 10 nflverse tables
   cached for 2016–2025 (~142 MB) via `python -m src.ingest.refresh`; snap-count
   and draft-capital loader names resolved. Toolchain pinned to Python 3.12.
+- **2026-07-10** — Feature panel built and validated. `python -m src.features.build`
+  produces `feature_panel.parquet` (6,015 player-seasons x 55 features, 2016–2025);
+  expected-TD backbone from ff_opportunity confirmed against real finishes.
