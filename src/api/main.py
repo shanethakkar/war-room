@@ -29,7 +29,9 @@ app = FastAPI(
 )
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    # Any localhost port - this is a local-only dev tool, and Next may land on
+    # 3000/3001/etc depending on what else is running.
+    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
     allow_methods=["GET"],
     allow_headers=["*"],
 )

@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-neutral-bg1 text-text-primary font-sans antialiased;
+  min-height: 100vh;
+  background-image:
+    radial-gradient(60rem 60rem at 85% -10%, rgba(130, 81, 238, 0.08), transparent),
+    radial-gradient(50rem 50rem at -10% 0%, rgba(59, 130, 246, 0.05), transparent);
+  background-attachment: fixed;
+}
+
+*:focus-visible {
+  @apply outline-none ring-2 ring-brand/60 ring-offset-2 ring-offset-neutral-bg1;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-neutral-bg5 rounded-full border-2 border-solid;
+  border-color: transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-neutral-bg6;
+}
+
+@layer components {
+  .glass {
+    @apply backdrop-blur-md bg-white/[0.03] border border-border;
+  }
+  .num {
+    @apply font-mono tabular-nums;
+  }
+}

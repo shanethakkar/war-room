@@ -4,12 +4,11 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** PIVOTAL FINDING from the new draft-simulation metric: the
-baseline's rank-correlation "edge" over ADP (+0.06) does **NOT** translate to
-better drafts. In wins terms (Monte-Carlo drafts, our board vs ADP), our board is
-slightly WORSE than the market (win rate ~0.45 vs a 0.50 null; bad in 2024).
-Rank correlation was flattering us. Next: diagnose why (positional allocation /
-top-pick misses) and improve against the draft-sim, not rank corr.
+**Current focus:** Strategic pivot (user-approved): the draft-sim showed we're at
+~parity with ADP and the gap is structural (research confirms - see below), so we
+**reframed the product as an honest decision toolkit** and shipped it: FastAPI
+`/board` + a polished **dark Next.js draft board** (calibrated intervals, tiers,
+format-aware VOR, ADP arbitrage radar). Screenshot-verified. Next: user's call.
 **Last updated:** 2026-07-10
 
 ---
@@ -71,6 +70,21 @@ reverse these.
     with ADP most years (≈0.49 ex-2024), not an edge - and closing the gap needs
     more *signal* (depth charts, offseason moves, rookie landing spot), not tuning.
     Strategic decision pending with the user.
+- **(2026-07-10) Research + decision: stop chasing "beat ADP", ship the toolkit.**
+  Researched what others have found (Fantasy Football Analytics 2016; FF Insights
+  2024; PFF breakout models): projection-vs-ADP is a tiny, year/position-dependent
+  margin - a 2024 study found ADP *beat* projections for RBs, matching our sim.
+  Real edges people cite need signal we lack (route-level *predicted* targets;
+  offseason role/depth-chart/beat-reporter info). Confirmed by our own superflex
+  draft-sim: **also below parity (0.40)** - superflex is QB-premium and our QB
+  projections have the same backward-looking anchoring, amplified. **Confidence in
+  beating ADP with open box-score data: LOW.** User chose to reframe: accept
+  ~parity, build the honest decision toolkit + usable frontend. (Chasing signal
+  parked as a possible future experiment.)
+- **(2026-07-10) Frontend stack: Next.js (App Router) + Tailwind v3.** Honors
+  CLAUDE.md's Next.js; used Tailwind v3 (stable, and the frontend-ui-dark-ts skill's
+  dark tokens drop in) rather than fighting v4 config on Windows. API on a spare
+  port in dev if 8000/3000 are taken; CORS allows any localhost port.
 - **(2026-07-10) The v1 Bayesian model does NOT beat the baseline; baseline stays
   default** (constraint #4). Head-to-head backtest 2021–2024 (redraft PPR):
   - Ranking: rank corr 0.708 (baseline 0.710) — a tie; beat-ADP +0.047 (baseline
@@ -221,7 +235,6 @@ reverse these.
 - [ ] Aging curves: position-specific age adjustment (delta method); add + re-backtest (must beat no-aging).
 - [ ] Tune shrinkage `k` constants + recency decay against the ADP backtest.
 - [ ] Investigate rookie conservatism vs ADP (biggest arbitrage fades); does it help or hurt the backtest?
-- [ ] Minimal API (`src/api`) + thin Next.js view for the board.
 - [ ] Improve the Bayesian model to actually beat the baseline (it currently ties on ranking and under-covers). Priority fix: model games/availability variance in the posterior predictive (multiplying ppg by fixed games misses the injury downside -> 65% coverage). Then re-backtest.
 
 **Doing**
@@ -249,6 +262,13 @@ reverse these.
   rosters scored by actual optimal starting lineup; per-season win-rate + margin;
   CLI. 3 network-free tests. Revealed the baseline does NOT out-draft ADP (see
   decisions log). Added `player_id` to the value board.
+- [x] Interface layer: **FastAPI `/board`** (`src/api/main.py` + `service.py`) serving
+  the value board + intervals + arbitrage per season/format (cached; lazy-imports
+  the pymc path), and a **polished dark Next.js draft board** (`frontend/`): season
+  selector, format toggle (redraft/superflex), position filter, search, value/market/
+  arbitrage sort; color-coded position tiers, floor-ceiling interval bars, VOR, ADP,
+  and the arbitrage radar (targets ▲ / fades ▼) - with honest framing. Screenshot-
+  verified (Playwright). 5 offline-safe API tests.
 - [x] Bayesian model (`src/projections/bayesian`): hierarchical PyMC ppg model -
   partially-pooled player effects (established players only, for tractability),
   position-varying slopes, position-specific aging (age/age^2 slopes), and
@@ -344,3 +364,8 @@ reverse these.
   Big finding: rank correlation was misleading — in simulated drafts our board does
   NOT beat ADP (win rate 0.45 vs 0.50 null, bad 2024). The real scoreboard; all
   future projection changes gated on it.
+- **2026-07-10** — Reframed to an honest decision toolkit and shipped the interface:
+  FastAPI `/board` + a polished dark Next.js draft board (calibrated intervals,
+  tiers, format-aware VOR, ADP arbitrage radar). Research + the superflex draft-sim
+  (0.40) confirmed beating ADP with open data is low-probability; value is the
+  transparent, calibrated toolkit, not a market-beating claim.
