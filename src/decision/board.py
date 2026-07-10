@@ -25,6 +25,7 @@ _BOARD_COLS: tuple[str, ...] = (
     "overall_rank",
     "position_rank",
     "position_tier",
+    "player_id",
     "player_name",
     "position",
     "position_group",

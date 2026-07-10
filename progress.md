@@ -4,11 +4,12 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Full Phase-1 pipeline is COMPLETE and **beats ADP** (baseline:
-rank corr 0.515 vs ADP 0.455, forward calibration 0.82). The **Bayesian swap-in is
-built and validated but does NOT beat the baseline yet** (ties on ranking,
-under-covers) — baseline stays default per constraint #4. Next: the thin API +
-Next.js board, and/or improving the Bayesian model (games-variance) + tuning.
+**Current focus:** PIVOTAL FINDING from the new draft-simulation metric: the
+baseline's rank-correlation "edge" over ADP (+0.06) does **NOT** translate to
+better drafts. In wins terms (Monte-Carlo drafts, our board vs ADP), our board is
+slightly WORSE than the market (win rate ~0.45 vs a 0.50 null; bad in 2024).
+Rank correlation was flattering us. Next: diagnose why (positional allocation /
+top-pick misses) and improve against the draft-sim, not rank corr.
 **Last updated:** 2026-07-10
 
 ---
@@ -48,6 +49,17 @@ reverse these.
   0.455 (positive every season, +0.06 mean); forward calibration coverage 0.82;
   overall accuracy Spearman 0.71 / MAE ~45. Modest but consistent, with an
   untuned transparent model — the Bayesian layer and tuning have room to extend it.
+- **(2026-07-10) DRAFT-SIM: our board does NOT beat ADP in wins, despite better
+  rank correlation.** New metric (`src/validation/draft_sim.py`): Monte-Carlo snake
+  drafts, half the teams draft by our VOR board, half by ADP (both rank+symmetric
+  noise; null verified at 0.504); rosters scored by actual optimal lineup.
+  Leakage-free 2021–2024, baseline redraft: mean **win rate 0.45**, margin **-41
+  pts** (2021 .49 / 2022 .51 / 2023 .47 / **2024 .33**). So the +0.06 rank-corr
+  edge is illusory for drafting - rank corr weights the whole pool equally, but
+  draft value lives in the top picks and positional allocation. **This is the real
+  scoreboard now; improvements are gated on it, not rank corr.** (Adds `player_id`
+  to the value board so it joins to actuals.) Diagnosis of the 2024 collapse +
+  positional allocation is the next task.
 - **(2026-07-10) The v1 Bayesian model does NOT beat the baseline; baseline stays
   default** (constraint #4). Head-to-head backtest 2021–2024 (redraft PPR):
   - Ranking: rank corr 0.708 (baseline 0.710) — a tie; beat-ADP +0.047 (baseline
@@ -221,6 +233,11 @@ reverse these.
   `value_board_<fmt>_<season>.parquet` + prints top-N. 8 network-free tests
   (allocation, VOR, superflex QB edge, tier gaps, board shape); 37/37 pytest,
   ruff + mypy `--strict` green. **Superflex QB edge validated on real 2025 data.**
+- [x] Draft-simulation "wins" metric (`src/validation/draft_sim.py`): Monte-Carlo
+  snake drafts (our VOR board vs ADP, symmetric rank+noise, null verified ~0.50),
+  rosters scored by actual optimal starting lineup; per-season win-rate + margin;
+  CLI. 3 network-free tests. Revealed the baseline does NOT out-draft ADP (see
+  decisions log). Added `player_id` to the value board.
 - [x] Bayesian model (`src/projections/bayesian`): hierarchical PyMC ppg model -
   partially-pooled player effects (established players only, for tractability),
   position-varying slopes, position-specific aging (age/age^2 slopes), and
@@ -312,3 +329,7 @@ reverse these.
   swap-in (hierarchical PyMC, nutpie sampler, ~40s/fit). Head-to-head: it does NOT
   beat the baseline (ties on ranking; 0.65 vs 0.82 coverage). Baseline stays default;
   the "baseline before Bayes" discipline held.
+- **2026-07-10** — Draft-simulation "wins" metric built (`src.validation.draft_sim`).
+  Big finding: rank correlation was misleading — in simulated drafts our board does
+  NOT beat ADP (win rate 0.45 vs 0.50 null, bad 2024). The real scoreboard; all
+  future projection changes gated on it.
