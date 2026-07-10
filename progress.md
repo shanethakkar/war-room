@@ -4,11 +4,11 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Transparent baseline projections run end-to-end (component
-stats -> per-format scoring), leakage-free, Spearman ~0.72 vs actual. Next up is
-the uncertainty layer (empirical residual intervals) and/or the decision layer
-(VOR/tiers) — VOR is what turns raw points into draft value and delivers the
-superflex edge.
+**Current focus:** Full Phase-1 pipeline works: ingest -> panel -> projection +
+**calibrated 80% intervals** -> VOR value board with **distribution-based tiers**.
+Superflex QB edge demonstrated. Next up is the ADP arbitrage board (pull Sleeper
+ADP; rank by projection-vs-market disagreement) and the formal ADP backtest (the
+real scoreboard).
 **Last updated:** 2026-07-10
 
 ---
@@ -103,6 +103,26 @@ reverse these.
   - Validated on real 2025: single-QB board leads with WR/RB (first QB at overall
     #12); superflex vaults Lamar #12->#1 (VOR 84->160), Allen #14->#2. Top 4
     superflex picks are QBs.
+- **(2026-07-10) Uncertainty = empirical scaled-residual quantiles, bucketed by
+  projection tier** (`src/projections/uncertainty.py`). Distribution is the product
+  (design.md §5).
+  - Residuals collected **leakage-free** (project each past season from prior data,
+    compare to actual PPR); 4,591 residuals over 2018–2025.
+  - Spread modeled as quantiles of `z = residual / max(projected, FLOOR)`, split by
+    position AND projection tier (top/mid/bottom third). **Bucketing was necessary,
+    not optional:** a single pooled-per-position z gave elite players an absurd
+    near-zero floor (Lamar 345 -> floor 3.6). Bucketed -> Lamar [122, 457]; elite
+    tiers are relatively tight, fringe tiers boom/bust. In-sample coverage ~80%
+    (QB 79 / RB 83 / TE 80 / WR 83). One residual model serves both formats (both
+    score PPR; only the roster differs).
+  - **Tiers upgraded to distribution-based** (`add_overlap_tiers`): naive interval
+    overlap over-merges (season intervals are huge -> one blob). Instead: new tier
+    when the anchor's median beats a player's median by > `TIER_SEP` sigma
+    (sigma from the 80% width), complete-linkage on an anchor to avoid chaining.
+    `TIER_SEP=0.5` (TUNABLE) gives draft-actionable elite tiers (QB t1~10, WR
+    t1~14, TE t1~5). The gap-based `add_position_tiers` remains as a fallback.
+  - Intervals attach in `run.py` (projection carries its distribution); the board
+    consumes them.
 
 ### Gotchas
 
@@ -133,8 +153,6 @@ reverse these.
 ### Phase 1 — Pre-draft research
 
 **Todo**
-- [ ] Uncertainty (baseline): empirical residual spread by role/position → intervals.
-- [ ] Overlap-based tiers: replace the provisional gap-based tiers once intervals exist (design.md §5).
 - [ ] Aging curves: position-specific age adjustment (delta method); add + re-backtest (must beat no-aging).
 - [ ] Tune shrinkage `k` constants + recency decay against the ADP backtest.
 - [ ] ADP arbitrage board: pull Sleeper ADP; rank by projection-vs-ADP disagreement.
@@ -163,6 +181,13 @@ reverse these.
   `value_board_<fmt>_<season>.parquet` + prints top-N. 8 network-free tests
   (allocation, VOR, superflex QB edge, tier gaps, board shape); 37/37 pytest,
   ruff + mypy `--strict` green. **Superflex QB edge validated on real 2025 data.**
+- [x] Uncertainty layer (`src/projections/uncertainty.py`) + distribution-based
+  tiers: leakage-free residual collection, scaled-residual quantiles bucketed by
+  position x projection tier, `add_intervals`, in-sample coverage, cached
+  `interval_model` (CLI: `python -m src.projections.uncertainty`). Intervals wired
+  into `run.py`; overlap tiers into the board. Calibrated ~80% coverage; realistic
+  elite intervals. 6 uncertainty tests + overlap-tier test; 43/43 pytest, ruff +
+  mypy `--strict` green.
 - [x] `uv` project scaffold: `pyproject.toml` (light baseline deps + optional
   `bayesian` extra), `ruff`/`mypy`/`pytest` config, `.gitignore`, `README.md`,
   and the full `src/` skeleton per `design.md` §3 — layer packages with
@@ -219,3 +244,6 @@ reverse these.
 - **2026-07-10** — Decision layer (VOR + tiers) live. `python -m src.decision.board`
   turns projections into a format-aware value board. Superflex QB edge demonstrated
   on real data: Lamar Jackson #12 (single-QB) -> #1 (superflex), same projections.
+- **2026-07-10** — Uncertainty layer live. Every projection now carries a calibrated
+  ~80% interval (leakage-free empirical residuals, bucketed by projection tier); the
+  board's tiers come from the distributions. "The distribution IS the product."

@@ -15,7 +15,7 @@ import argparse
 import polars as pl
 
 from src.decision.replacement import add_starter_flags, add_vor
-from src.decision.tiers import add_position_tiers
+from src.decision.tiers import add_overlap_tiers
 from src.formats import FORMATS, FormatConfig, get_format
 from src.ingest.cache import write_table
 from src.projections import MODELS
@@ -32,14 +32,20 @@ _BOARD_COLS: tuple[str, ...] = (
     "is_rookie",
     "projected_games",
     "projected_points",
+    "points_low",
+    "points_high",
     "replacement_level",
     "vor",
 )
 
 
 def build_value_board(scored: pl.DataFrame, fmt: FormatConfig) -> pl.DataFrame:
-    """Compute VOR, tiers, and ranks; return the board sorted by VOR (best first)."""
-    df = add_position_tiers(add_vor(add_starter_flags(scored, fmt.roster)))
+    """Compute VOR, overlap tiers, and ranks; sorted by VOR (best first).
+
+    ``scored`` must carry prediction intervals (``points_low`` / ``points_high``)
+    from the uncertainty layer - tiers come from interval overlap (design.md §5).
+    """
+    df = add_overlap_tiers(add_vor(add_starter_flags(scored, fmt.roster)))
     df = df.with_columns(
         pl.col("vor")
         .rank("ordinal", descending=True)

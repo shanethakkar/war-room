@@ -1,7 +1,7 @@
 """Decision-layer tests - network-free.
 
 Covers replacement-level VOR, the superflex QB edge (the headline differentiator),
-tier gaps, and the assembled board shape.
+tier methods, and the assembled board shape.
 """
 
 from __future__ import annotations
@@ -11,13 +11,13 @@ from typing import Any
 import polars as pl
 from src.decision.board import _BOARD_COLS, build_value_board
 from src.decision.replacement import add_starter_flags, add_vor
-from src.decision.tiers import add_position_tiers
+from src.decision.tiers import add_overlap_tiers, add_position_tiers
 from src.formats import get_format
 from src.formats.base import RosterConfig
 
 
 def _scored(players: list[tuple[str, float]]) -> pl.DataFrame:
-    """Build a scored projection from (position_group, points) pairs."""
+    """Build a scored projection (with placeholder intervals) from (pos, pts) pairs."""
     rows: list[dict[str, Any]] = []
     for i, (pos, pts) in enumerate(players):
         rows.append(
@@ -30,6 +30,9 @@ def _scored(players: list[tuple[str, float]]) -> pl.DataFrame:
                 "is_rookie": False,
                 "projected_games": 16.0,
                 "projected_points": pts,
+                "points_low": pts * 0.6,
+                "points_median": pts,
+                "points_high": pts * 1.4,
             }
         )
     return pl.DataFrame(rows)
@@ -98,6 +101,23 @@ def test_position_tiers_break_on_gap() -> None:
     )
     out = add_position_tiers(df, gap=10.0).sort("vor", descending=True)
     # 100,95 together; big gap to 60 starts tier 2; 58 stays tier 2.
+    assert out["position_tier"].to_list() == [1, 1, 2, 2]
+
+
+def test_overlap_tiers_split_on_sigma_scaled_gap() -> None:
+    # Interval width 128 -> sigma ~= 128/2.563 ~= 50; TIER_SEP=1 -> ~50-pt threshold.
+    medians = [300.0, 290.0, 150.0, 140.0]
+    df = pl.DataFrame(
+        {
+            "position_group": ["WR"] * 4,
+            "projected_points": medians,
+            "points_median": medians,
+            "points_low": [m - 64.0 for m in medians],
+            "points_high": [m + 64.0 for m in medians],
+        }
+    )
+    out = add_overlap_tiers(df).sort("points_median", descending=True)
+    # 300 & 290 within ~1 sigma -> tier 1; 150 is >1 sigma below -> tier 2; 140 joins.
     assert out["position_tier"].to_list() == [1, 1, 2, 2]
 
 

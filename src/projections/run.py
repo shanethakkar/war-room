@@ -20,15 +20,17 @@ from src.formats.score import score_components
 from src.ingest.cache import read_table, write_table
 from src.projections import MODELS
 from src.projections.baseline.project import project_season
+from src.projections.uncertainty import add_intervals, load_or_fit_interval_model
 
 
 def run(
     *, season: int, model: str = "baseline", fmt_key: str = "redraft_ppr"
 ) -> pl.DataFrame:
-    """Produce a scored component projection for ``season`` and cache it.
+    """Produce a scored projection with prediction intervals for ``season``.
 
-    Projects format-agnostic component stats, then scores them under ``fmt_key``
-    (the distribution/uncertainty layer lands next; this is the point estimate).
+    Projects format-agnostic component stats, scores them under ``fmt_key``, and
+    attaches an empirical prediction interval (design.md §5) - the distribution,
+    not just the point estimate.
     """
     if model not in MODELS:
         raise ValueError(f"Unknown model {model!r}; choose from {MODELS}.")
@@ -40,7 +42,8 @@ def run(
     panel = read_table("feature_panel")
     players = read_table("players")
     projection = project_season(panel, players, season)
-    scored = score_components(projection, get_format(fmt_key)).sort(
+    scored = score_components(projection, get_format(fmt_key))
+    scored = add_intervals(scored, load_or_fit_interval_model(panel, players)).sort(
         "projected_points", descending=True
     )
     write_table(f"projections_{model}_{fmt_key}_{season}", scored)
@@ -52,11 +55,11 @@ def _print_top(scored: pl.DataFrame, fmt_key: str, n: int) -> None:
         "player_name",
         "position",
         "team",
-        "is_rookie",
-        pl.col("projected_games").round(1),
         pl.col("projected_points").round(1),
+        pl.col("points_low").round(1),
+        pl.col("points_high").round(1),
     )
-    print(f"[projections] top {n} for format '{fmt_key}':")
+    print(f"[projections] top {n} for format '{fmt_key}' (with 80% interval):")
     with pl.Config(tbl_rows=n, tbl_hide_dataframe_shape=True):
         print(top)
 
