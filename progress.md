@@ -4,9 +4,11 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Feature panel done — 6,015 player-seasons x 55 features
-(2016–2025), validated against known finishes. Next up is baseline projections
-(`src/projections/baseline`). (Format configs already scaffolded.)
+**Current focus:** Transparent baseline projections run end-to-end (component
+stats -> per-format scoring), leakage-free, Spearman ~0.72 vs actual. Next up is
+the uncertainty layer (empirical residual intervals) and/or the decision layer
+(VOR/tiers) — VOR is what turns raw points into draft value and delivers the
+superflex edge.
 **Last updated:** 2026-07-10
 
 ---
@@ -68,6 +70,25 @@ reverse these.
   - Age = as of Sept 1 of the season; draft capital + `rookie_season` from
     `players`. Left joins throughout (a production row is never dropped).
   - Output cached as `feature_panel.parquet`.
+- **(2026-07-10) Baseline projection = transparent, component-first, then scored**
+  (`src/projections/baseline`). Confirmed approach: project component stats, then
+  score per format (so superflex/custom scoring falls out correctly), not fantasy
+  points directly.
+  - **Volume** projected per-game, lightly shrunk toward the position mean (sticky).
+  - **Efficiency** per-opportunity rates shrunk *hard* toward the positional pooled
+    mean, weighted by the player's own opportunity (explicit partial pooling). `k`
+    constants are in opportunity units and **TUNABLE via the backtest**.
+  - **TDs** from shrunk *expected*-TD rates (ff_opportunity), never raw prior TDs.
+  - **Rookies** via draft-capital priors (position x draft round, position-level
+    fallback); rookie QBs get passing priors too.
+  - **Scoring** lives in `src/formats/score.py` (interprets a `ScoringConfig` over
+    component columns) so there's no projection->decision layer inversion.
+  - **Aging curves deliberately deferred** — an unvalidated age adjustment must not
+    ship before the backtest can prove it helps. First enhancement to test.
+  - Validated (leakage-free, project 2024 from <=2023): overall Spearman **0.721**
+    (QB .71 / RB .75 / WR .73 / TE .74; rookies .64). Honest caveat: only marginally
+    beats a naive last-season carry-forward (.716) on returning players — the edge
+    must come from tuning + the ADP benchmark, which is the real scoreboard.
 
 ### Gotchas
 
@@ -98,8 +119,9 @@ reverse these.
 ### Phase 1 — Pre-draft research
 
 **Todo**
-- [ ] Baseline projections (`src/projections/baseline`): top-down team environment → share allocation → regressed efficiency → expected-TD-based scoring.
 - [ ] Uncertainty (baseline): empirical residual spread by role/position → intervals.
+- [ ] Aging curves: position-specific age adjustment (delta method); add + re-backtest (must beat no-aging).
+- [ ] Tune shrinkage `k` constants + recency decay against the ADP backtest.
 - [ ] Decision layer (`src/decision`): VOR against format replacement level; distribution-overlap tiers.
 - [ ] ADP arbitrage board: pull Sleeper ADP; rank by projection-vs-ADP disagreement.
 - [ ] Validation (`src/validation`): train-through-N / project-N+1 backtest; rank corr + MAE + calibration; ADP benchmark.
@@ -112,6 +134,14 @@ reverse these.
 
 **Done**
 - [x] Project planning: methodology, architecture, constraints, roadmap (see `design.md`).
+- [x] Baseline projections (`src/projections/baseline`) + per-format scoring
+  (`src/formats/score.py`): recency-weighted recent form -> shrinkage regression
+  (volume light, efficiency + expected-TD hard) -> component stat line -> scored
+  by format. Rookies via draft-capital priors. `projections.run --season Y
+  --format K` writes `projections_<model>_<fmt>_<season>.parquet` + prints top-N.
+  9 network-free tests (scoring, pooled priors, shrinkage, no-leakage, rookies);
+  33/33 pytest, ruff + mypy `--strict` green. Validated leakage-free (Spearman
+  0.721 overall on 2024). Aging deferred to a backtested enhancement.
 - [x] `uv` project scaffold: `pyproject.toml` (light baseline deps + optional
   `bayesian` extra), `ruff`/`mypy`/`pytest` config, `.gitignore`, `README.md`,
   and the full `src/` skeleton per `design.md` §3 — layer packages with
@@ -162,3 +192,6 @@ reverse these.
 - **2026-07-10** — Feature panel built and validated. `python -m src.features.build`
   produces `feature_panel.parquet` (6,015 player-seasons x 55 features, 2016–2025);
   expected-TD backbone from ff_opportunity confirmed against real finishes.
+- **2026-07-10** — Baseline projection runs end-to-end. `python -m src.projections.run
+  --season 2025` produces sane component projections scored per format; leakage-free
+  backtest Spearman 0.721 (2024). The transparent benchmark the Bayesian model must beat.
