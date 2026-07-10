@@ -31,8 +31,8 @@ where the public market is soft.
   decision layer (scoring weights + replacement level).
 - **Baseline before Bayes.** A transparent non-Bayesian projection ships first and
   becomes the benchmark the PyMC model must beat.
-- **Beat ADP or it doesn't count.** ADP (public, via Sleeper) is the real field
-  consensus and the honest benchmark.
+- **Beat ADP or it doesn't count.** ADP (public, via Fantasy Football Calculator)
+  is the real field consensus and the honest benchmark.
 
 ## 3. System architecture
 
@@ -157,8 +157,9 @@ project.
 - **Accuracy:** rank correlation and MAE vs. actual end-of-season finish.
 - **Calibration:** do the 80% intervals contain the outcome ~80% of the time?
   Consensus can't even measure this; it's a core deliverable.
-- **Benchmark:** **beat ADP** (public via Sleeper) at predicting finish. Every
-  projection change is re-backtested against this scoreboard.
+- **Benchmark:** **beat ADP** (public via Fantasy Football Calculator) at
+  predicting finish. Every projection change is re-backtested against this
+  scoreboard.
 
 ## 9. Data sources (all `nflreadpy`)
 
@@ -169,8 +170,11 @@ project.
 - `load_schedules` — games and context.
 - snap-count / draft-capital datasets in nflverse — confirm exact function
   signatures against nflreadpy docs when scaffolding.
-- **Sleeper API (external, free, no key):** ADP + live-draft sync only. Never
-  feeds projections.
+- **Fantasy Football Calculator API (external, free, no key):** ADP only
+  (current + historical, PPR + superflex). The market benchmark; never feeds
+  projections.
+- **Sleeper API (external, free, no key):** live-draft sync only (Phase 2).
+  Sleeper exposes no ADP, so ADP moved to FFC (see `progress.md`, 2026-07-10).
 
 ## 10. Phased roadmap
 

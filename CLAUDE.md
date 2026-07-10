@@ -25,9 +25,12 @@ These are guardrails. Do not violate them without an explicit decision logged in
    archived in Sept 2025. Any tutorial referencing it is stale. `nflreadpy`
    returns **Polars** DataFrames, not pandas — write Polars-native code and only
    `.to_pandas()` at a boundary that genuinely needs it (e.g. PyMC input).
-3. **The only external runtime API is Sleeper** (free, no key), used ONLY for ADP
-   and live-draft sync in Phases 1–2. It never feeds projections. Everything
-   projection-related must work fully offline from cached nflverse data.
+3. **ADP (the market benchmark) comes from Fantasy Football Calculator's free,
+   no-key API; live-draft sync (Phase 2) comes from Sleeper (free, no key).**
+   Both are external runtime APIs used ONLY for ADP / live-draft — they NEVER feed
+   projections. Everything projection-related must work fully offline from cached
+   nflverse data. (Original plan was Sleeper-for-ADP, but Sleeper exposes no ADP;
+   see the 2026-07-10 decision in `progress.md`. Still no FantasyPros/PFF/ESPN.)
 4. **Ship the transparent baseline before the Bayesian model.** The pipeline must
    run end-to-end and backtest against ADP with a simple, non-Bayesian projection
    first. The PyMC layer is a swap-in that must prove it beats that baseline.

@@ -4,11 +4,11 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Full Phase-1 pipeline works: ingest -> panel -> projection +
-**calibrated 80% intervals** -> VOR value board with **distribution-based tiers**.
-Superflex QB edge demonstrated. Next up is the ADP arbitrage board (pull Sleeper
-ADP; rank by projection-vs-market disagreement) and the formal ADP backtest (the
-real scoreboard).
+**Current focus:** Full Phase-1 pipeline is COMPLETE and **beats ADP**: ingest ->
+panel -> projection + calibrated intervals -> VOR board + tiers -> ADP-arbitrage
+board -> formal backtest. Leakage-free 2021–2024: our rank corr 0.515 vs ADP 0.455
+(beats ADP every season), forward calibration coverage 0.82. Next: the Bayesian
+model (must beat this baseline), plus aging/tuning refinements.
 **Last updated:** 2026-07-10
 
 ---
@@ -35,6 +35,19 @@ reverse these.
 - **Superflex QB valuation** identified as the biggest concrete edge: correct
   replacement baseline, no special modeling.
 - **Rookies:** draft-capital priors + wide uncertainty under the open constraint.
+- **(2026-07-10) ADP source = Fantasy Football Calculator, NOT Sleeper.**
+  *Constraint change to CLAUDE.md #3, user-approved.* Verified Sleeper's public API
+  exposes no ADP (no endpoint/field; `search_rank` is an unpopulated sentinel), and
+  nflreadpy's only ADP-ish table is FantasyPros ECR (banned by #1). FFC is free,
+  no-key, and has current + historical ADP for PPR and superflex (2QB) — exactly
+  what the arbitrage board and the beat-ADP backtest need. ADP is a benchmark ONLY
+  and never feeds projections, so the open/offline guardrail is intact. Sleeper is
+  retained for Phase-2 live-draft sync (it hosts drafts).
+- **(2026-07-10) The baseline BEATS ADP** (the scoreboard, design.md §8).
+  Leakage-free backtest 2021–2024 on the drafted pool: our Spearman 0.515 vs ADP
+  0.455 (positive every season, +0.06 mean); forward calibration coverage 0.82;
+  overall accuracy Spearman 0.71 / MAE ~45. Modest but consistent, with an
+  untuned transparent model — the Bayesian layer and tuning have room to extend it.
 - **(2026-07-10) Project named "War Room."** Threaded into `README.md` and docs.
 - **(2026-07-10) Training window = 2016–present.** Modern pass-heavy era; keeps
   shares and aging curves on-regime without old rule/scheme eras. Encoded as
@@ -139,6 +152,14 @@ reverse these.
 - ~~Exact nflreadpy function names for snap counts + draft capital.~~ **RESOLVED
   (2026-07-10):** `load_snap_counts(seasons=...)` (PFR, since 2012) and
   `load_draft_picks(seasons=...)` (since 1980). Both cached.
+- ~~ADP source (design assumed Sleeper).~~ **RESOLVED (2026-07-10):** Sleeper has
+  no ADP -> moved to Fantasy Football Calculator (see decisions log). Note: FFC
+  returns Error for year 2025 (gap); 2019–2024 + 2026 are available.
+- **Rookie projections sit well below market ADP** (arbitrage board shows rookies
+  as the biggest fades). Our draft-capital prior is conservative and ignores
+  landing spot / college profile. Is that alpha (market overdrafts rookies) or a
+  model weakness? The rookie-heavy pool is small in the backtest; investigate as
+  part of tuning + the (future) college-data question.
 - Route participation source: `load_snap_counts` gives snap share but not routes.
   Routes/route-participation (needed for target-share modeling, design.md §4.1)
   likely come from `load_participation` / `load_nextgen_stats` — evaluate coverage
@@ -155,8 +176,7 @@ reverse these.
 **Todo**
 - [ ] Aging curves: position-specific age adjustment (delta method); add + re-backtest (must beat no-aging).
 - [ ] Tune shrinkage `k` constants + recency decay against the ADP backtest.
-- [ ] ADP arbitrage board: pull Sleeper ADP; rank by projection-vs-ADP disagreement.
-- [ ] Validation (`src/validation`): train-through-N / project-N+1 backtest; rank corr + MAE + calibration; ADP benchmark.
+- [ ] Investigate rookie conservatism vs ADP (biggest arbitrage fades); does it help or hurt the backtest?
 - [ ] Minimal API (`src/api`) + thin Next.js view for the board.
 - [ ] Bayesian projections (`src/projections/bayesian`): PyMC hierarchical (offense group level + partially-pooled player role + aging curves); posterior predictive intervals.
 - [ ] Prove Bayesian beats baseline on the scoreboard; make it the default only if it wins.
@@ -188,6 +208,13 @@ reverse these.
   into `run.py`; overlap tiers into the board. Calibrated ~80% coverage; realistic
   elite intervals. 6 uncertainty tests + overlap-tier test; 43/43 pytest, ruff +
   mypy `--strict` green.
+- [x] ADP arbitrage board + formal backtest (the scoreboard). `src/names.py`
+  (name matching), `src/ingest/adp.py` (FFC ADP client + cache + CLI),
+  `src/decision/arbitrage.py` (rank by projection-vs-ADP disagreement; targets +
+  fades; CLI), `src/validation/backtest.py` (leakage-free accuracy + forward
+  calibration + beat-ADP benchmark; CLI). **Baseline beats ADP** 2021–2024
+  (0.515 vs 0.455, positive every season; coverage 0.82). 6 network-free market
+  tests; 47/47 pytest, ruff + mypy `--strict` green.
 - [x] `uv` project scaffold: `pyproject.toml` (light baseline deps + optional
   `bayesian` extra), `ruff`/`mypy`/`pytest` config, `.gitignore`, `README.md`,
   and the full `src/` skeleton per `design.md` §3 — layer packages with
@@ -247,3 +274,7 @@ reverse these.
 - **2026-07-10** — Uncertainty layer live. Every projection now carries a calibrated
   ~80% interval (leakage-free empirical residuals, bucketed by projection tier); the
   board's tiers come from the distributions. "The distribution IS the product."
+- **2026-07-10** — **Phase-1 pipeline complete and it BEATS ADP.** ADP-arbitrage
+  board (`src.decision.arbitrage`) + formal backtest (`src.validation.backtest`) on
+  FFC ADP. Leakage-free 2021–2024: our rank corr 0.515 vs ADP 0.455 (every season),
+  forward calibration 0.82. ADP source moved Sleeper -> FFC (user-approved).
