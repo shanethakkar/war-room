@@ -30,11 +30,13 @@ import polars as pl
 from src.config import DATA_START_SEASON
 from src.formats import get_format
 from src.formats.base import ScoringConfig
-from src.formats.score import score_components
+from src.formats.score import score_components, score_special
 from src.ingest.cache import read_table, write_table
 from src.projections.baseline.project import LOOKBACK, project_season
+from src.projections.special import project_special
 
-MODEL_NAME = "interval_model"
+# v2: includes K/DST residuals (bumped so a stale offense-only cache is not reused).
+MODEL_NAME = "interval_model_v2"
 
 # Softening floor (PPR points): below this projection, spread is scaled by FLOOR
 # rather than the (tiny, noisy) projection itself.
@@ -97,6 +99,33 @@ def collect_residuals(
                     "residual"
                 ),
             )
+        )
+    return pl.concat(frames, how="vertical")
+
+
+def collect_special_residuals(
+    special_panel: pl.DataFrame, seasons: Sequence[int]
+) -> pl.DataFrame:
+    """Leakage-free (projected, actual) pairs for K/DST across ``seasons``.
+
+    K/DST scoring is PPR-agnostic, so the default scoring config serves as the
+    reference (mirroring the PPR reference for offense).
+    """
+    frames: list[pl.DataFrame] = []
+    for year in seasons:
+        projection = score_special(
+            project_special(special_panel, year), _PPR_SCORING
+        ).select("player_id", "position_group", "projected_points")
+        actual = score_special(
+            special_panel.filter(pl.col("season") == year), _PPR_SCORING, "actual"
+        ).select("player_id", "actual")
+        frames.append(
+            projection.join(actual, on="player_id", how="inner")
+            .with_columns(
+                pl.lit(year).cast(pl.Int32).alias("season"),
+                (pl.col("actual") - pl.col("projected_points")).alias("residual"),
+            )
+            .drop("actual")
         )
     return pl.concat(frames, how="vertical")
 
@@ -186,10 +215,28 @@ def load_or_fit_interval_model(
     try:
         return read_table(MODEL_NAME)
     except FileNotFoundError:
-        residuals = collect_residuals(panel, players, default_seasons(panel))
+        seasons = default_seasons(panel)
+        residuals = _all_residuals(panel, players, seasons)
         model = fit_interval_model(residuals)
         write_table(MODEL_NAME, model)
         return model
+
+
+def _all_residuals(
+    panel: pl.DataFrame, players: pl.DataFrame, seasons: list[int]
+) -> pl.DataFrame:
+    """Offense + K/DST residuals, aligned to the fit's input schema."""
+    offense = collect_residuals(panel, players, seasons).select(
+        "player_id", "position_group", "projected_points", "season", "residual"
+    )
+    try:
+        special_panel = read_table("special_panel")
+    except FileNotFoundError:  # cache predates DST/K; offense-only intervals
+        return offense
+    special = collect_special_residuals(special_panel, seasons).select(
+        "player_id", "position_group", "projected_points", "season", "residual"
+    )
+    return pl.concat([offense, special], how="vertical")
 
 
 def main() -> None:
@@ -201,7 +248,7 @@ def main() -> None:
     players = read_table("players")
     seasons = default_seasons(panel)
     print(f"[uncertainty] collecting residuals for seasons {seasons[0]}-{seasons[-1]}")
-    residuals = collect_residuals(panel, players, seasons)
+    residuals = _all_residuals(panel, players, seasons)
     model = fit_interval_model(residuals)
     write_table(MODEL_NAME, model)
 

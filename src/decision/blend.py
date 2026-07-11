@@ -8,11 +8,14 @@ within-position reordering) all tested WORSE, so this stays deliberately simple:
 
     blend = W_MODEL * rank_model + W_AUX * rank_aux_model + (rest) * rank_adp
 
-Sim-validated on 2019-2024 (see progress.md decisions log):
-- 2-way (baseline 0.30 / ADP 0.70): LOSO win rate 0.548, every fold chose 0.30.
-- 3-way (baseline 0.20 / bayesian 0.10 / ADP 0.70): 0.564 on a fresh seed at
-  n=500 - the shipped default when the bayesian extra is available; the diverse
-  third forecast adds value even though it only ties the baseline solo.
+Sim-validated on 2019-2024 with the REALISTIC sim (DST/K slots, needs-aware
+drafting for both sides, 15 rounds; see progress.md decisions log):
+- 2-way (offense-only tilt): flat optimum w=0.10-0.20, LOSO 0.512 vs 0.507 null.
+- 3-way (baseline 0.10 / bayesian 0.10 / ADP 0.80): 0.533 - the shipped default
+  when the bayesian extra is available.
+- DST/K rank purely by market: their model-ordering signal measured as noise
+  (DST) or worse than market (K).
+The edge is real but modest and year-dependent (2019/2024 at or below null).
 
 Players without an ADP (deep rookies / free agents) are appended after the
 matched pool, ordered by model VOR.
@@ -24,11 +27,15 @@ import polars as pl
 
 from src.names import norm_name_expr
 
-# 2-way fallback weight (LOSO-validated).
-MODEL_WEIGHT: float = 0.30
-# 3-way ensemble weights (fresh-seed confirmed).
-BASE_WEIGHT: float = 0.20
+# 2-way fallback weight (middle of the flat 0.10-0.20 optimum on the realistic
+# sim; LOSO honest estimate 0.512 vs the 0.507 null).
+MODEL_WEIGHT: float = 0.15
+# 3-way ensemble weights (best on the realistic sim: 0.533; see progress.md).
+BASE_WEIGHT: float = 0.10
 BAYES_WEIGHT: float = 0.10
+# Positions ranked purely by market: their model-ordering signal is noise
+# (DST) or worse than market (K) - measured, not assumed. See progress.md.
+MARKET_ONLY_POSITIONS: tuple[str, ...] = ("DST", "K")
 
 
 def blend_with_market(
@@ -79,6 +86,12 @@ def blend_with_market(
         blend_expr = model_weight * pl.col("_vr") + (1 - model_weight) * pl.col(
             "adp_market_rank"
         )
+    # DST/K rank purely by market; the model's ordering there is noise.
+    blend_expr = (
+        pl.when(pl.col("position_group").is_in(list(MARKET_ONLY_POSITIONS)))
+        .then(pl.col("adp_market_rank").cast(pl.Float64))
+        .otherwise(blend_expr)
+    )
 
     matched = (
         matched.with_columns(blend_expr.alias("_blend"))

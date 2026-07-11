@@ -4,11 +4,13 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** The board now ships a **validated edge**: a market-anchored
-blend (ADP 0.70 / baseline 0.20 / bayesian 0.10) that out-drafts pure-ADP
-drafting in six-season simulations (**win rate 0.564 vs 0.50**, fresh-seed
-confirmed) — while our pure model alone loses (0.40). UI reframed accordingly
-(Board rank + model Tilt). Full pipeline + interface shipped and verified.
+**Current focus:** DST/K + fully flexible league formats are wired in
+(backend-first, user-directed), and the draft-sim was made substantially more
+realistic in the process (needs-aware drafting, 15 rounds, full DST/K pools) —
+which **revised the blend edge downward, honestly**: 3-way blend (ADP 0.80 /
+baseline 0.10 / bayesian 0.10, DST/K pinned to market) wins **0.533 vs a 0.507
+null**; earlier 0.564 was partly a sim artifact (see decisions log). UI numbers
+updated to match.
 **Last updated:** 2026-07-10
 
 ---
@@ -115,8 +117,49 @@ reverse these.
   - Superflex blend is thinner (2-way 0.51; 3-way untested) — noted, not oversold.
   - **Scoreboard now: 0.50 pure ADP -> 0.564 blended.** Win rate = share of our
     6 teams finishing top-half by actual optimal-lineup points, 12-team drafts.
-- **(2026-07-11) The edge, in human terms** (solo-user sim: ONE blend drafter vs
-  11 ADP drafters, 600 drafts/season, 2019–2024, random draft slot):
+- **(2026-07-11) DST/K + flexible formats shipped (backend-first, user-directed).**
+  - **Data:** kicker components by distance from `player_stats_season` (fg buckets,
+    PATs); DST components from pbp + schedules (sacks, INTs, fumble recoveries,
+    DST/ST TDs via `td_team`, safeties, points-allowed bracket counts) — REG only
+    (both sources carry playoffs; caught via games=18-21 and Broncos 65-vs-63
+    sacks). Cached as `special_panel` by `features.build`.
+  - **Projections:** heavily regressed per-game rates -> league mean (DST shrinks
+    harder than K); PA bucket probabilities renormalized; DST plays 17. Intervals
+    from the same empirical machinery (interval model v2 includes K/DST residuals).
+  - **Formats are now fully config:** every scoring number is a knob (pass_td 4/6,
+    PPR 0/.5/1, TE premium, K distance values, DST brackets), presets
+    redraft_{ppr,half,standard} + superflex + two_qb, `customize()` for overrides,
+    and `/board` accepts league-setup query params (teams, slots, scoring), cached
+    per resolved config. ADP market resolves per config (`ffc_slug`); FFC `PK`/`DEF`
+    map to K/DST, and FFC's city-style defense names ("LA Rams Defense") are
+    canonicalized to team names for the join.
+- **(2026-07-11) SIM REALISM PASS — the honest revision.** Wiring DST/K into the
+  draft-sim exposed artifacts that had inflated the published blend numbers:
+  1. **Empty-slot stranding:** naive ADP bots pick purely by ADP priority and can
+     finish a draft without a DST/K/QB (a ~100-250-point phantom penalty). The
+     needs-aware fix (both sides must fill starter slots by the endgame, like any
+     human) plus full 32-DST/34-K pools (unmatched at synthetic late ADP ordered
+     by OUR vor — conservative) and the correct **15 rounds** (9 starters + 6
+     bench; 14 was arbitrary) produce clean nulls (0.503-0.509).
+  2. On this realistic sim the old numbers do not hold: uniform blend 0.30 ->
+     ~0.50; the DST/K "edge" (+12pp) was entirely artifact — measured ordering
+     signal: DST spearman +0.14 (market +0.01), K +0.21 (market +0.37, better).
+  3. **Recalibrated shipped config:** offense tilt only, DST/K pinned to market.
+     2-way flat optimum w=0.10-0.20 (LOSO 0.512); **3-way baseline 0.10 /
+     bayesian 0.10 / ADP 0.80 -> 0.533 vs 0.507 null** — the shipped default.
+     Year risk explicit: 2019/2024 at or below null; 2020-2023 0.53-0.61.
+  4. Every future change gates on THIS sim (`draft_sim --blend`, needs-aware,
+     15 rounds, DST/K pools).
+  5. **Revised human-terms numbers** (1 blend drafter vs 11 ADP, shipped 3-way
+     config, 500 drafts/season): **+33 pts/season (+1.9/wk)**, avg finish 5.94
+     (null 6.5), **top-half 56.7%**, top-3 31.2%, most-points 11.7% (null 8.3%).
+     Per-season is the honest part: 2021-2023 strong (+76..+110, 66-74%
+     top-half), 2020 flat, **2019 -19 and 2024 -64 (36% top-half)** — the edge
+     is a multi-season tilt with real down-year risk, and the UI says so.
+- **(2026-07-11) The edge, in human terms — SUPERSEDED by the realistic-sim
+  numbers below the next entry.** Original naive-bot measurement (kept for the
+  record; solo-user sim: ONE blend drafter vs 11 ADP drafters, 600 drafts/season,
+  2019–2024, random draft slot):
   - **+51 points/season vs league average** (~3.0/week over 17 weeks; roughly
     half an extra H2H win/season under typical weekly variance).
   - **Average points-based finish 5.56 vs the 6.5 null**; top-half (playoff)
@@ -305,6 +348,12 @@ reverse these.
   rosters scored by actual optimal starting lineup; per-season win-rate + margin;
   CLI. 3 network-free tests. Revealed the baseline does NOT out-draft ADP (see
   decisions log). Added `player_id` to the value board.
+- [x] DST/K + flexible formats (`src/projections/special.py`, extended
+  `formats/*`, `special_panel` cache, interval model v2, `/board` league-setup
+  params, FFC PK/DEF + defense-name canonicalization, DST/K in the value board
+  and frontend). Sim upgraded to needs-aware drafting + 15 rounds + full DST/K
+  pools; blend recalibrated on it (see decisions log). 9 new special/format
+  tests + blend market-pinning test.
 - [x] Interface layer: **FastAPI `/board`** (`src/api/main.py` + `service.py`) serving
   the value board + intervals + arbitrage per season/format (cached; lazy-imports
   the pymc path), and a **polished dark Next.js draft board** (`frontend/`): season
@@ -418,3 +467,11 @@ reverse these.
   landed on ADP 0.70 / baseline 0.20 / bayesian 0.10 -> draft-sim win rate
   **0.564 vs 0.50** pure ADP. Board reranked by the blend; "Arbitrage" reframed
   as model Tilt; `draft_sim --blend` gates future changes. McBride #3 -> #20.
+- **2026-07-11** — **DST/K + flexible league formats shipped; sim made realistic;
+  blend numbers honestly revised.** Every scoring/roster rule is now a knob
+  (pass_td, PPR, TE premium, K distances, DST brackets, team count, 2QB), the
+  board covers all startable positions, and the upgraded sim (needs-aware
+  drafting, 15 rounds, full DST/K pools) exposed artifacts in the earlier
+  numbers: revised edge is **0.533 vs 0.507 null** (3-way: ADP 0.80 / baseline
+  0.10 / bayesian 0.10; DST/K pinned to market - their ordering signal measured
+  as noise). Footer updated to the revised, smaller, honest numbers.

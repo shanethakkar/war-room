@@ -17,7 +17,7 @@ import polars as pl
 
 from src.formats.base import RosterConfig
 
-SKILL: tuple[str, ...] = ("QB", "RB", "WR", "TE")
+SKILL: tuple[str, ...] = ("QB", "RB", "WR", "TE", "DST", "K")
 FLEX_ELIGIBLE: tuple[str, ...] = ("RB", "WR", "TE")
 SUPERFLEX_ELIGIBLE: tuple[str, ...] = ("QB", "RB", "WR", "TE")
 
@@ -28,7 +28,14 @@ def _dedicated_counts(roster: RosterConfig) -> pl.DataFrame:
     return pl.DataFrame(
         {
             "position_group": list(SKILL),
-            "_base": [t * roster.qb, t * roster.rb, t * roster.wr, t * roster.te],
+            "_base": [
+                t * roster.qb,
+                t * roster.rb,
+                t * roster.wr,
+                t * roster.te,
+                t * roster.dst,
+                t * roster.k,
+            ],
         }
     )
 

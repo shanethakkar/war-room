@@ -1,10 +1,10 @@
-"""Feature entrypoint: cached nflverse tables -> player-season feature panel.
+"""Feature entrypoint: cached nflverse tables -> feature panels.
 
     uv run python -m src.features.build [--summary]
 
-Reads the cached tables (``player_stats_season``, ``ff_opportunity``,
-``snap_counts``, ``players``), assembles the panel via the pure transforms in
-``panel.py``, and writes it to ``data/cache/feature_panel.parquet``. All I/O is
+Builds and caches two panels: the offense player-season panel
+(``feature_panel``, via the pure transforms in ``panel.py``) and the K/DST
+component panel (``special_panel``, via ``projections.special``). All I/O is
 here; the transforms stay pure and testable.
 """
 
@@ -16,10 +16,12 @@ import polars as pl
 
 from src.features.panel import assemble_panel
 from src.ingest.cache import read_table, write_table
+from src.projections.special import build_special_panel
 
 PANEL_NAME = "feature_panel"
+SPECIAL_NAME = "special_panel"
 
-# Source tables the panel is built from.
+# Source tables the panels are built from.
 _SOURCES = ("player_stats_season", "ff_opportunity", "snap_counts", "players")
 
 
@@ -34,6 +36,18 @@ def build_panel() -> pl.DataFrame:
     )
     write_table(PANEL_NAME, panel)
     return panel
+
+
+def build_special() -> pl.DataFrame:
+    """Assemble the K/DST component panel and cache it."""
+    special = build_special_panel(
+        player_stats_season=read_table("player_stats_season"),
+        pbp=read_table("pbp"),
+        schedules=read_table("schedules"),
+        teams=read_table("teams"),
+    )
+    write_table(SPECIAL_NAME, special)
+    return special
 
 
 def _coverage(panel: pl.DataFrame, column: str) -> float:
@@ -76,6 +90,13 @@ def main() -> None:
 
     panel = build_panel()
     print(f"[features] wrote {PANEL_NAME} ({panel.height:,} rows) to the cache.")
+    special = build_special()
+    by_pos = special.group_by("position_group").len().sort("position_group").to_dicts()
+    print(
+        f"[features] wrote {SPECIAL_NAME} ({special.height:,} rows: "
+        + ", ".join(f"{r['position_group']}={r['len']}" for r in by_pos)
+        + ") to the cache."
+    )
     if args.summary:
         _print_summary(panel)
 

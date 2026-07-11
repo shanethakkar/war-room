@@ -77,10 +77,9 @@ def test_weight_one_is_pure_model_order() -> None:
 
 
 def test_default_blend_anchors_to_market() -> None:
-    out = blend_with_market(BOARD, ADP)  # w = 0.30
-    # Blend scores: Darling 0.3*4+0.7*1=1.9; Back 2.0; Wideout 3.0; TE 3.1.
-    # A 30% tilt shifts scores but crosses no rank boundary in this small pool -
-    # the market order holds, which is exactly the anchoring behavior we want.
+    out = blend_with_market(BOARD, ADP)  # default w
+    # A minority tilt shifts scores but crosses no rank boundary in this small
+    # pool - the market order holds, which is exactly the anchoring we want.
     assert _order(out) == [
         "Market Darling",
         "Consensus Back",
@@ -95,10 +94,13 @@ def test_blend_reorders_adjacent_picks_on_strong_disagreement() -> None:
     board = _board(
         [
             ("Model Fave", "WR", 200.0),  # model's #1; market's #2
-            ("Model Fade", "WR", 50.0),  # market's #1; model's last
             ("Mid One", "RB", 120.0),
             ("Mid Two", "RB", 110.0),
             ("Mid Three", "TE", 100.0),
+            ("Mid Four", "WR", 90.0),
+            ("Mid Five", "RB", 80.0),
+            ("Mid Six", "TE", 70.0),
+            ("Model Fade", "WR", 50.0),  # market's #1; model's last
         ]
     )
     adp = _adp(
@@ -108,15 +110,45 @@ def test_blend_reorders_adjacent_picks_on_strong_disagreement() -> None:
             ("Mid One", "RB", 3.0),
             ("Mid Two", "RB", 4.0),
             ("Mid Three", "TE", 5.0),
+            ("Mid Four", "WR", 6.0),
+            ("Mid Five", "RB", 7.0),
+            ("Mid Six", "TE", 8.0),
         ]
     )
-    out = blend_with_market(board, adp)
-    # Fave blend 0.3*1+0.7*2=1.7 overtakes Fade 0.3*5+0.7*1=2.2.
+    out = blend_with_market(board, adp)  # w=0.15
+    # Fave blend 0.15*1+0.85*2=1.85 overtakes Fade 0.15*8+0.85*1=2.05.
     assert _order(out)[0] == "Model Fave"
     fave = out.filter(pl.col("player_name") == "Model Fave").row(0, named=True)
     fade = out.filter(pl.col("player_name") == "Model Fade").row(0, named=True)
     assert fave["model_tilt"] > 0  # model moved him up from market
     assert fade["model_tilt"] < 0  # model dragged him down
+
+
+def test_dst_and_k_rank_purely_by_market() -> None:
+    board = _board(
+        [
+            ("Alpha Wideout", "WR", 200.0),
+            ("Great Defense", "DST", 500.0),  # model loves it - must NOT matter
+            ("Meh Defense", "DST", 10.0),  # model hates it - must NOT matter
+            ("Some Kicker", "K", 400.0),
+        ]
+    )
+    adp = _adp(
+        [
+            ("Alpha Wideout", "WR", 1.0),
+            ("Meh Defense", "DST", 2.0),  # market prefers the 'meh' one
+            ("Great Defense", "DST", 3.0),
+            ("Some Kicker", "K", 4.0),
+        ]
+    )
+    out = blend_with_market(board, adp)
+    # DST order follows the market exactly, ignoring the model's huge VOR gap.
+    assert _order(out) == [
+        "Alpha Wideout",
+        "Meh Defense",
+        "Great Defense",
+        "Some Kicker",
+    ]
 
 
 def test_aux_model_participates_in_blend() -> None:

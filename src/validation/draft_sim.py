@@ -21,20 +21,23 @@ import polars as pl
 
 from src.decision.board import build_value_board
 from src.formats import FORMATS, get_format
-from src.formats.base import RosterConfig
+from src.formats.base import RosterConfig, ScoringConfig
+from src.formats.score import score_special
 from src.ingest.adp import load_adp
 from src.ingest.cache import read_table
 from src.names import norm_name_expr
 from src.projections import MODELS
 from src.projections.pipeline import scored_projection
 
-_POS = ("QB", "RB", "WR", "TE")
+_POS = ("QB", "RB", "WR", "TE", "DST", "K")
 _POS_CODE = {p: i for i, p in enumerate(_POS)}
-# Slot eligibility by position code: dedicated, FLEX (RB/WR/TE), SUPERFLEX (all).
+# Slot eligibility by position code: dedicated, FLEX (RB/WR/TE), SUPERFLEX (QB+flex).
 _FLEX = frozenset({1, 2, 3})
 _SUPERFLEX = frozenset({0, 1, 2, 3})
 
-ROUNDS = 14
+# 9 starters + 6 bench = the standard 15-round draft; 14 was arbitrary and
+# compressed the flexible picks where ranking skill differentiates.
+ROUNDS = 15
 N_TEAMS = 12
 N_SIMS = 200
 # Draft variance, in picks, applied SYMMETRICALLY to both strategies (rank + noise)
@@ -59,6 +62,8 @@ def _caps(roster: RosterConfig) -> np.ndarray:
             roster.rb + roster.flex + roster.superflex + 3,
             roster.wr + roster.flex + roster.superflex + 3,
             roster.te + 2,
+            max(roster.dst, 0) + (1 if roster.dst else 0),
+            max(roster.k, 0) + (1 if roster.k else 0),
         ]
     )
 
@@ -72,6 +77,8 @@ def _lineup_slots(roster: RosterConfig) -> list[frozenset[int]]:
     slots += [frozenset({3})] * roster.te
     slots += [_FLEX] * roster.flex
     slots += [_SUPERFLEX] * roster.superflex
+    slots += [frozenset({4})] * roster.dst
+    slots += [frozenset({5})] * roster.k
     return slots
 
 
@@ -103,6 +110,30 @@ def _snake_order(n_teams: int, rounds: int) -> list[int]:
     return order
 
 
+def _needs(counts_row: np.ndarray, roster: RosterConfig) -> tuple[int, np.ndarray]:
+    """(total unfilled starter slots, per-position 'filling helps' mask).
+
+    Dedicated needs first; surplus RB/WR/TE (beyond dedicated) fill FLEX, then
+    surplus QB/RB/WR/TE fill SUPERFLEX.
+    """
+    dedicated = np.array(
+        [roster.qb, roster.rb, roster.wr, roster.te, roster.dst, roster.k]
+    )
+    ded_need = np.maximum(dedicated - counts_row, 0)
+    surplus = np.maximum(counts_row - dedicated, 0)
+    flex_used = min(int(surplus[1] + surplus[2] + surplus[3]), roster.flex)
+    flex_need = roster.flex - flex_used
+    sf_surplus = int(surplus[0] + surplus[1] + surplus[2] + surplus[3]) - flex_used
+    sf_need = max(roster.superflex - max(sf_surplus, 0), 0)
+    total = int(ded_need.sum()) + flex_need + sf_need
+    helps = ded_need > 0
+    if flex_need > 0:
+        helps[[1, 2, 3]] = True
+    if sf_need > 0:
+        helps[[0, 1, 2, 3]] = True
+    return total, helps
+
+
 def simulate_draft(
     pos_codes: np.ndarray,
     actual: np.ndarray,
@@ -112,28 +143,38 @@ def simulate_draft(
     caps: np.ndarray,
     slots: list[frozenset[int]],
     order: list[int],
+    roster: RosterConfig,
 ) -> np.ndarray:
     """One draft (lower priority = drafted earlier): each team's lineup value.
 
-    ``our_priority`` / ``adp_priority`` are already rank+noise arrays; the pick is
-    the eligible player with the lowest priority for the team's strategy.
+    Both strategies are **needs-aware at the endgame**: once a team's remaining
+    picks are no more than its unfilled starter slots, it may only pick players
+    that fill one - like every human drafter, nobody finishes without a K/DST.
     """
     n_teams = len(our_mask)
     n_players = len(pos_codes)
     available = np.ones(n_players, dtype=bool)
     counts = np.zeros((n_teams, len(_POS)), dtype=int)
+    picks_left = np.full(n_teams, len(order) // n_teams)
     rosters_c: list[list[int]] = [[] for _ in range(n_teams)]
     rosters_p: list[list[float]] = [[] for _ in range(n_teams)]
 
     for team in order:
         cap_ok = counts[team][pos_codes] < caps[pos_codes]
         eligible = available & cap_ok
+        need_total, helps = _needs(counts[team], roster)
+        if need_total >= picks_left[team]:  # endgame: must fill starters
+            forced = eligible & helps[pos_codes]
+            if forced.any():
+                eligible = forced
         if not eligible.any():
+            picks_left[team] -= 1
             continue
         priority = our_priority if our_mask[team] else adp_priority
         pick = int(np.argmin(np.where(eligible, priority, np.inf)))
         available[pick] = False
         counts[team][pos_codes[pick]] += 1
+        picks_left[team] -= 1
         rosters_c[team].append(int(pos_codes[pick]))
         rosters_p[team].append(float(actual[pick]))
 
@@ -170,7 +211,7 @@ def evaluate_pool(
         our_pri = our_rank + rng.normal(0.0, NOISE_PICKS, n_players)
         adp_pri = adp_rank + rng.normal(0.0, NOISE_PICKS, n_players)
         values = simulate_draft(
-            pos_codes, actual, our_pri, adp_pri, our_mask, caps, slots, order
+            pos_codes, actual, our_pri, adp_pri, our_mask, caps, slots, order, roster
         )
         ours = values[our_mask]
         theirs = values[~our_mask]
@@ -189,27 +230,61 @@ def evaluate_pool(
     }
 
 
+def _actual_points(panel: pl.DataFrame, season: int) -> pl.DataFrame:
+    """Actual season points per player, offense + K/DST (reference scoring)."""
+    offense = panel.filter(
+        (pl.col("season") == season) & (pl.col("games") >= 1)
+    ).select("player_id", pl.col("fantasy_points_ppr").alias("actual_points"))
+    try:
+        special_panel = read_table("special_panel")
+    except FileNotFoundError:
+        return offense
+    special = score_special(
+        special_panel.filter(pl.col("season") == season),
+        ScoringConfig(),
+        "actual_points",
+    ).select("player_id", "actual_points")
+    return pl.concat([offense, special])
+
+
 def build_pool(
     panel: pl.DataFrame, players: pl.DataFrame, season: int, model: str, fmt_key: str
 ) -> pl.DataFrame:
-    """Draftable pool for ``season``: our VOR board ∩ ADP ∩ actual outcome."""
+    """Draftable pool for ``season``: our VOR board ∩ ADP ∩ actual outcome.
+
+    Offense requires an ADP match (that's the drafted pool). DST/K keep ALL
+    projected entries: FFC carries only ~12 of each, and 12 teams x 1 required
+    starter with zero slack lets early DST/K picks strand opponents with empty
+    slots - a sim artifact worth ~100 phantom points. Unmatched DST/K get
+    synthetic late ADP ordered by OUR model's VOR, which is the conservative
+    choice: it gives ADP drafters our knowledge for free.
+    """
     scored = scored_projection(panel, players, season, model=model, fmt_key=fmt_key)
     board = build_value_board(scored, get_format(fmt_key)).with_columns(
         norm_name_expr("player_name")
     )
-    actual = panel.filter((pl.col("season") == season) & (pl.col("games") >= 1)).select(
-        "player_id", pl.col("fantasy_points_ppr").alias("actual_points")
-    )
     adp = load_adp(season, fmt_key).select("norm_name", "position", "adp")
-    return (
-        board.join(actual, on="player_id", how="inner")
-        .join(
-            adp,
-            left_on=["norm_name", "position_group"],
-            right_on=["norm_name", "position"],
-            how="inner",
+    joined = board.join(
+        _actual_points(panel, season), on="player_id", how="inner"
+    ).join(
+        adp,
+        left_on=["norm_name", "position_group"],
+        right_on=["norm_name", "position"],
+        how="left",
+    )
+    matched = joined.filter(pl.col("adp").is_not_null())
+    max_adp = float(matched.select(pl.col("adp").max()).item() or 200.0)
+    special_unmatched = (
+        joined.filter(
+            pl.col("adp").is_null() & pl.col("position_group").is_in(["DST", "K"])
         )
-        .filter(pl.col("position_group").is_in(_POS))
+        .sort("vor", descending=True)
+        .with_columns(
+            (max_adp + 1.0 + pl.int_range(0, pl.len()).cast(pl.Float64)).alias("adp")
+        )
+    )
+    return pl.concat([matched, special_unmatched]).filter(
+        pl.col("position_group").is_in(_POS)
     )
 
 
@@ -217,13 +292,15 @@ def apply_blend(pool: pl.DataFrame, model_weight: float) -> pl.DataFrame:
     """Replace the pool's ranking score with the market-anchored blend.
 
     Mirrors ``decision.blend``: score = w * model-VOR-rank + (1-w) * ADP-rank
-    (negated so 'higher = better' matches the sim's convention).
+    (negated so 'higher = better' matches the sim's convention). DST/K are
+    pinned to market rank, as the shipped board does - their ordering signal is
+    noise (see progress.md).
     """
-    blended = (
-        model_weight * pool["vor"].rank(descending=True)
-        + (1 - model_weight) * pool["adp"].rank()
-    )
-    return pool.with_columns((-blended).alias("vor"))
+    vr = pool["vor"].rank(descending=True).to_numpy()
+    ar = pool["adp"].rank().to_numpy()
+    spec = np.isin(np.array(pool["position_group"].to_list()), ["DST", "K"])
+    blended = np.where(spec, ar, model_weight * vr + (1 - model_weight) * ar)
+    return pool.with_columns(pl.Series("vor", -blended))
 
 
 def draft_sim(

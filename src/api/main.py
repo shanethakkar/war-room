@@ -17,7 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src import __version__
 from src.api.service import DEFAULT_MODEL, get_board
-from src.formats import FORMATS
+from src.formats import FORMATS, customize, get_format
 
 # Seasons offered by the board (2026 = the upcoming draft; earlier = backtestable).
 SEASONS: tuple[int, ...] = (2026, 2025, 2024, 2023)
@@ -58,9 +58,29 @@ def list_seasons() -> dict[str, list[int]]:
 @app.get("/board")
 def board(
     season: int = Query(default=SEASONS[0]),
-    format: str = Query(default="redraft_ppr"),
+    format: str = Query(default="redraft_ppr", description="Preset format key."),
+    # Roster overrides (league setup).
+    teams: int | None = Query(default=None, ge=4, le=20),
+    qb: int | None = Query(default=None, ge=0, le=3),
+    rb: int | None = Query(default=None, ge=0, le=5),
+    wr: int | None = Query(default=None, ge=0, le=5),
+    te: int | None = Query(default=None, ge=0, le=3),
+    flex: int | None = Query(default=None, ge=0, le=4),
+    superflex: int | None = Query(default=None, ge=0, le=2),
+    dst: int | None = Query(default=None, ge=0, le=2),
+    k: int | None = Query(default=None, ge=0, le=2),
+    # Scoring overrides (the headline knobs; presets carry the rest).
+    rec: float | None = Query(default=None, ge=0.0, le=2.0),
+    pass_td: float | None = Query(default=None, ge=0.0, le=8.0),
+    pass_int: float | None = Query(default=None, ge=-6.0, le=0.0),
+    te_rec_bonus: float | None = Query(default=None, ge=0.0, le=1.5),
 ) -> dict[str, Any]:
-    """Value board + arbitrage for a season/format (the frontend's main payload)."""
+    """The blended board for a season and league setup.
+
+    ``format`` picks a preset; any override param customizes it (e.g.
+    ``?format=redraft_ppr&teams=10&pass_td=6&qb=2``). Boards are cached per
+    resolved configuration.
+    """
     if season not in SEASONS:
         raise HTTPException(
             404, f"Unknown season {season}; choose from {list(SEASONS)}."
@@ -69,12 +89,35 @@ def board(
         raise HTTPException(
             404, f"Unknown format {format!r}; choose from {sorted(FORMATS)}."
         )
+    overrides = {
+        name: value
+        for name, value in {
+            "teams": teams,
+            "qb": qb,
+            "rb": rb,
+            "wr": wr,
+            "te": te,
+            "flex": flex,
+            "superflex": superflex,
+            "dst": dst,
+            "k": k,
+            "rec": rec,
+            "pass_td": pass_td,
+            "pass_int": pass_int,
+            "te_rec_bonus": te_rec_bonus,
+        }.items()
+        if value is not None
+    }
+    fmt = get_format(format)
+    if overrides:
+        fmt = customize(fmt, **overrides)
     return {
         "season": season,
         "format": format,
-        "format_name": FORMATS[format].name,
+        "format_name": fmt.name,
+        "overrides": overrides,
         "model": DEFAULT_MODEL,
-        "players": get_board(season, format),
+        "players": get_board(season, fmt),
     }
 
 

@@ -36,8 +36,14 @@ def test_seasons_through_rejects_pre_window() -> None:
         seasons_through(DATA_START_SEASON - 1)
 
 
-def test_both_formats_registered() -> None:
-    assert set(FORMATS) == {"redraft_ppr", "superflex"}
+def test_preset_formats_registered() -> None:
+    assert set(FORMATS) == {
+        "redraft_ppr",
+        "redraft_half",
+        "redraft_standard",
+        "superflex",
+        "two_qb",
+    }
 
 
 def test_full_ppr_reception_point() -> None:

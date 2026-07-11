@@ -24,7 +24,18 @@ def test_seasons_lists_upcoming_first() -> None:
 
 def test_formats_endpoint() -> None:
     formats = client.get("/formats").json()
-    assert set(formats) == {"redraft_ppr", "superflex"}
+    assert {
+        "redraft_ppr",
+        "redraft_half",
+        "redraft_standard",
+        "superflex",
+        "two_qb",
+    } == set(formats)
+
+
+def test_board_rejects_bad_override() -> None:
+    # teams=99 violates the query validation bounds.
+    assert client.get("/board?season=2026&teams=99").status_code == 422
 
 
 def test_board_rejects_unknown_season() -> None:

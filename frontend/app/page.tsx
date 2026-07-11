@@ -9,7 +9,7 @@ const FORMATS = [
   { value: "superflex", label: "Superflex" },
 ];
 const SEASONS = [2026, 2025, 2024, 2023];
-const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"];
+const POSITIONS = ["ALL", "QB", "RB", "WR", "TE", "DST", "K"];
 const SORTS = [
   { value: "board", label: "Board" },
   { value: "model", label: "Model" },
@@ -96,15 +96,17 @@ export default function Page() {
 
       <p className="mt-4 max-w-3xl text-xs leading-relaxed text-text-muted">
         <span className="font-medium text-text-secondary">How this board works.</span>{" "}
-        The ranking anchors to market ADP with a validated minority tilt from our
-        open-data models (~70% market / 30% model ensemble). In six-season draft
-        simulations vs a 12-team league of ADP drafters, this board averaged{" "}
-        <span className="text-text-secondary">+51 points a season (~3/week)</span>,
-        lifting points-based playoff odds from 50% to ~61% and an average finish
-        from 6.5 to 5.6 — a real tilt, not a guarantee (two of six seasons were
-        flat). <span className="text-good">Tilt</span> shows where the models
-        nudge a player from market; bars show the calibrated 80% floor–ceiling
-        interval.
+        The ranking anchors to market ADP with a small validated tilt from our
+        open-data models (~80% market / 20% model ensemble; DST and K rank purely
+        by market — our signal there is noise, and we measured it). In realistic
+        six-season draft simulations vs a full league of ADP drafters this board
+        averaged <span className="text-text-secondary">+33 points a season
+        (~2/week)</span>, lifting points-based playoff odds from 50% to ~57% —
+        but the edge is year-dependent: it won clearly in 2021–2023 and{" "}
+        <span className="text-bad">underperformed the market in 2019 and 2024</span>.
+        A multi-season tilt, not a guarantee. <span className="text-good">Tilt</span>{" "}
+        shows where the models nudge a player from market; bars show the
+        calibrated 80% floor–ceiling interval.
       </p>
     </main>
   );

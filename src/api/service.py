@@ -21,7 +21,7 @@ from src.decision.blend import (
     blend_with_market,
 )
 from src.decision.board import build_value_board
-from src.formats import get_format
+from src.formats import FormatConfig
 from src.ingest.adp import load_adp
 from src.ingest.cache import read_table
 from src.projections.pipeline import scored_projection
@@ -51,14 +51,14 @@ _OUTPUT_COLS = (
 
 
 def _bayes_aux(
-    panel: pl.DataFrame, players: pl.DataFrame, season: int, fmt_key: str
+    panel: pl.DataFrame, players: pl.DataFrame, season: int, fmt: FormatConfig
 ) -> pl.DataFrame | None:
     """Bayesian board scores for the 3-way ensemble; None if pymc is unavailable."""
     try:
         scored = scored_projection(
-            panel, players, season, model="bayesian", fmt_key=fmt_key
+            panel, players, season, model="bayesian", fmt_key=fmt
         )
-        board = build_value_board(scored, get_format(fmt_key))
+        board = build_value_board(scored, fmt)
         return board.select("player_id", pl.col("vor").alias("aux_vor"))
     except ImportError:
         return None
@@ -68,7 +68,7 @@ def _ranked_board(
     board: pl.DataFrame,
     aux: pl.DataFrame | None,
     season: int,
-    fmt_key: str,
+    fmt: FormatConfig,
 ) -> pl.DataFrame:
     """Blend the board with market ADP; degrade gracefully if ADP is unreachable.
 
@@ -78,7 +78,7 @@ def _ranked_board(
     """
     board = board.rename({"overall_rank": "model_rank"})
     try:
-        adp = load_adp(season, fmt_key)
+        adp = load_adp(season, fmt, teams=fmt.roster.teams)
     except (RuntimeError, OSError):
         return board.with_columns(
             pl.col("model_rank").cast(pl.Int64).alias("board_rank"),
@@ -93,18 +93,19 @@ def _ranked_board(
     return blend_with_market(board, adp)
 
 
-@lru_cache(maxsize=32)
-def get_board(season: int, fmt_key: str) -> list[dict[str, Any]]:
-    """The blended board (rank + tiers + intervals + tilt) as JSON-ready rows."""
+@lru_cache(maxsize=64)
+def get_board(season: int, fmt: FormatConfig) -> list[dict[str, Any]]:
+    """The blended board for a (season, resolved format) - JSON-ready rows.
+
+    ``fmt`` is the fully-resolved (possibly customized) config; being a frozen
+    dataclass it doubles as the cache key, so every distinct league setup gets
+    its own cached board.
+    """
     panel = read_table("feature_panel")
     players = read_table("players")
-    scored = scored_projection(
-        panel, players, season, model=DEFAULT_MODEL, fmt_key=fmt_key
-    )
-    aux = _bayes_aux(panel, players, season, fmt_key)
-    board = _ranked_board(
-        build_value_board(scored, get_format(fmt_key)), aux, season, fmt_key
-    )
+    scored = scored_projection(panel, players, season, model=DEFAULT_MODEL, fmt_key=fmt)
+    aux = _bayes_aux(panel, players, season, fmt)
+    board = _ranked_board(build_value_board(scored, fmt), aux, season, fmt)
     present = [c for c in _OUTPUT_COLS if c in board.columns]
     return (
         board.select(present)

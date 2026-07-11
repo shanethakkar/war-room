@@ -7,6 +7,8 @@ const POS_STYLE: Record<string, string> = {
   RB: "text-pos-rb bg-pos-rb/10 ring-pos-rb/25",
   WR: "text-pos-wr bg-pos-wr/10 ring-pos-wr/25",
   TE: "text-pos-te bg-pos-te/10 ring-pos-te/25",
+  DST: "text-rose-300 bg-rose-300/10 ring-rose-300/25",
+  K: "text-stone-300 bg-stone-300/10 ring-stone-300/25",
 };
 
 export const POS_BAR: Record<string, string> = {
@@ -14,6 +16,8 @@ export const POS_BAR: Record<string, string> = {
   RB: "bg-pos-rb",
   WR: "bg-pos-wr",
   TE: "bg-pos-te",
+  DST: "bg-rose-300",
+  K: "bg-stone-300",
 };
 
 export function PositionBadge({ pos, tier }: { pos: string; tier: number }) {

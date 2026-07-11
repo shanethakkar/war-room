@@ -54,7 +54,7 @@ def test_adp_normalize_shapes_and_ranks() -> None:
             "times_drafted": 120,
         },
     ]
-    out = _normalize(players, year=2024, fmt_key="redraft_ppr", teams=12)
+    out = _normalize(players, year=2024, slug="ppr", teams=12)
     assert {"adp_name", "norm_name", "position", "adp", "adp_rank"} <= set(out.columns)
     # Lower ADP -> rank 1; frame sorted by adp ascending.
     assert out["adp_name"].to_list() == ["A Receiver", "B Back"]
