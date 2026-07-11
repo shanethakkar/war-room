@@ -56,21 +56,25 @@ export function IntervalBar({
   );
 }
 
-export function ArbCell({ delta }: { delta: number | null }) {
+export function TiltCell({ delta }: { delta: number | null }) {
   if (delta === null)
     return <span className="text-text-muted">·</span>;
-  const target = delta > 0;
-  const big = Math.abs(delta) >= 25;
+  const up = delta > 0;
+  const big = Math.abs(delta) >= 8;
   return (
     <span
       className={clsx(
         "num inline-flex items-center gap-1 tabular-nums",
-        delta === 0 ? "text-text-muted" : target ? "text-good" : "text-bad",
+        delta === 0 ? "text-text-muted" : up ? "text-good" : "text-bad",
         big && "font-semibold",
       )}
-      title={target ? "We value above market (target)" : "Market values above us (fade)"}
+      title={
+        up
+          ? "Model tilts this player up from market ADP"
+          : "Model tilts this player down from market ADP"
+      }
     >
-      {delta === 0 ? "—" : target ? "▲" : "▼"}
+      {delta === 0 ? "—" : up ? "▲" : "▼"}
       {delta !== 0 && Math.abs(delta)}
     </span>
   );

@@ -2,7 +2,8 @@ export const API_URL =
   process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 
 export type Player = {
-  overall_rank: number;
+  board_rank: number;
+  model_rank: number;
   position_rank: number;
   position_tier: number;
   player_id: string;
@@ -18,7 +19,7 @@ export type Player = {
   vor: number;
   adp: number | null;
   adp_market_rank: number | null;
-  arbitrage_delta: number | null;
+  model_tilt: number | null;
 };
 
 export type BoardResponse = {

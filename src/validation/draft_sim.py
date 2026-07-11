@@ -213,6 +213,19 @@ def build_pool(
     )
 
 
+def apply_blend(pool: pl.DataFrame, model_weight: float) -> pl.DataFrame:
+    """Replace the pool's ranking score with the market-anchored blend.
+
+    Mirrors ``decision.blend``: score = w * model-VOR-rank + (1-w) * ADP-rank
+    (negated so 'higher = better' matches the sim's convention).
+    """
+    blended = (
+        model_weight * pool["vor"].rank(descending=True)
+        + (1 - model_weight) * pool["adp"].rank()
+    )
+    return pool.with_columns((-blended).alias("vor"))
+
+
 def draft_sim(
     panel: pl.DataFrame,
     players: pl.DataFrame,
@@ -220,12 +233,19 @@ def draft_sim(
     model: str = "baseline",
     fmt_key: str = "redraft_ppr",
     n_sims: int = N_SIMS,
+    blend_weight: float | None = None,
 ) -> pl.DataFrame:
-    """Per-season draft-simulation report of our board vs ADP."""
+    """Per-season draft-simulation report of our board vs ADP.
+
+    ``blend_weight`` evaluates the market-anchored blend (the shipped ranking)
+    instead of the pure model board; gate changes on this.
+    """
     roster = get_format(fmt_key).roster
     rows: list[dict[str, object]] = []
     for year in seasons:
         pool = build_pool(panel, players, year, model, fmt_key)
+        if blend_weight is not None:
+            pool = apply_blend(pool, blend_weight)
         metrics = evaluate_pool(pool, roster, n_sims=n_sims)
         rows.append({"season": year, "pool_n": pool.height, **metrics})
     return pl.DataFrame(rows)
@@ -242,16 +262,27 @@ def main() -> None:
         "--format", dest="fmt_key", choices=sorted(FORMATS), default="redraft_ppr"
     )
     parser.add_argument("--sims", type=int, default=N_SIMS)
+    parser.add_argument(
+        "--blend",
+        type=float,
+        default=None,
+        metavar="W",
+        help="Evaluate the market-anchored blend at model weight W (the shipped "
+        "ranking uses decision.blend.MODEL_WEIGHT) instead of the pure board.",
+    )
     args = parser.parse_args()
 
     panel = read_table("feature_panel")
     players = read_table("players")
     seasons = list(range(args.start, args.through + 1))
+    label = f"blend w={args.blend}" if args.blend is not None else "pure board"
     print(
-        f"[draft-sim] {args.model} {args.fmt_key}: seasons {seasons[0]}-{seasons[-1]}, "
-        f"{args.sims} sims x {N_TEAMS} teams (half our-board, half ADP)"
+        f"[draft-sim] {args.model} {args.fmt_key} ({label}): seasons "
+        f"{seasons[0]}-{seasons[-1]}, {args.sims} sims x {N_TEAMS} teams"
     )
-    report = draft_sim(panel, players, seasons, args.model, args.fmt_key, args.sims)
+    report = draft_sim(
+        panel, players, seasons, args.model, args.fmt_key, args.sims, args.blend
+    )
     with pl.Config(tbl_rows=report.height, tbl_hide_dataframe_shape=True):
         print(
             report.select(

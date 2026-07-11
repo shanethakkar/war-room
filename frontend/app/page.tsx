@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArbCell, IntervalBar, POS_BAR, PositionBadge, Segmented } from "@/components/atoms";
+import { IntervalBar, POS_BAR, PositionBadge, Segmented, TiltCell } from "@/components/atoms";
 import { type BoardResponse, type Player, fetchBoard } from "@/lib/api";
 
 const FORMATS = [
@@ -11,16 +11,17 @@ const FORMATS = [
 const SEASONS = [2026, 2025, 2024, 2023];
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"];
 const SORTS = [
-  { value: "vor", label: "Value" },
+  { value: "board", label: "Board" },
+  { value: "model", label: "Model" },
   { value: "adp", label: "Market (ADP)" },
-  { value: "arb", label: "Arbitrage" },
+  { value: "tilt", label: "Tilt" },
 ];
 
 export default function Page() {
   const [season, setSeason] = useState(2026);
   const [format, setFormat] = useState("redraft_ppr");
   const [pos, setPos] = useState("ALL");
-  const [sort, setSort] = useState("vor");
+  const [sort, setSort] = useState("board");
   const [query, setQuery] = useState("");
   const [data, setData] = useState<BoardResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -53,13 +54,11 @@ export default function Page() {
         p.player_name.toLowerCase().includes(query.trim().toLowerCase()),
       );
     const s = [...r];
-    if (sort === "adp")
-      s.sort((a, b) => (a.adp ?? 9999) - (b.adp ?? 9999));
-    else if (sort === "arb")
-      s.sort(
-        (a, b) => (b.arbitrage_delta ?? -9999) - (a.arbitrage_delta ?? -9999),
-      );
-    else s.sort((a, b) => a.overall_rank - b.overall_rank);
+    if (sort === "adp") s.sort((a, b) => (a.adp ?? 9999) - (b.adp ?? 9999));
+    else if (sort === "model") s.sort((a, b) => a.model_rank - b.model_rank);
+    else if (sort === "tilt")
+      s.sort((a, b) => (b.model_tilt ?? -9999) - (a.model_tilt ?? -9999));
+    else s.sort((a, b) => a.board_rank - b.board_rank);
     return s.slice(0, 250);
   }, [players, pos, query, sort]);
 
@@ -96,12 +95,14 @@ export default function Page() {
       </div>
 
       <p className="mt-4 max-w-3xl text-xs leading-relaxed text-text-muted">
-        <span className="font-medium text-text-secondary">Honest framing.</span>{" "}
-        Projections derive entirely from open nflverse data; the bar shows the 80%
-        prediction interval (floor–ceiling), and <span className="text-good">Arb</span>{" "}
-        flags where our value diverges from market ADP. In backtests our board is
-        roughly at parity with ADP — treat this as a calibrated decision aid, not a
-        promise to beat the market.
+        <span className="font-medium text-text-secondary">How this board works.</span>{" "}
+        The ranking anchors to market ADP with a validated minority tilt from our
+        open-data models (an ensemble weighted ~70% market / 30% model). In
+        six-season draft simulations this blend out-drafts pure-ADP drafting
+        (win rate ≈0.56 vs 0.50) — while our pure model alone does not, so{" "}
+        <span className="text-good">Tilt</span> shows where the models nudge a
+        player from market, not a claim to outsmart it. Bars show the calibrated
+        80% floor–ceiling interval.
       </p>
     </main>
   );
@@ -124,7 +125,7 @@ function Header({
           <h1 className="text-2xl font-semibold tracking-tight">War Room</h1>
         </div>
         <p className="mt-1 text-sm text-text-secondary">
-          Pre-draft value board · calibrated projections + ADP arbitrage radar
+          Pre-draft board · market-anchored ranking + calibrated model tilt
         </p>
       </div>
       <div className="text-right">
@@ -152,7 +153,7 @@ function TableHeader() {
       <div>Projection · floor–ceiling</div>
       <div className="text-right">VOR</div>
       <div className="text-right">ADP</div>
-      <div className="text-right">Arb</div>
+      <div className="text-right">Tilt</div>
     </div>
   );
 }
@@ -161,7 +162,7 @@ function Row({ p, scaleMax }: { p: Player; scaleMax: number }) {
   return (
     <div className={`${GRID} border-b border-border-subtle px-3 py-2 transition-colors hover:bg-white/[0.025]`}>
       <div className={`h-6 w-[3px] rounded-full ${POS_BAR[p.position_group] ?? "bg-white/10"}`} />
-      <div className="num text-right text-sm tabular-nums text-text-muted">{p.overall_rank}</div>
+      <div className="num text-right text-sm tabular-nums text-text-muted">{p.board_rank}</div>
       <div>
         <PositionBadge pos={p.position_group} tier={p.position_tier} />
       </div>
@@ -190,7 +191,7 @@ function Row({ p, scaleMax }: { p: Player; scaleMax: number }) {
         {p.adp !== null ? p.adp.toFixed(1) : "·"}
       </div>
       <div className="text-right">
-        <ArbCell delta={p.arbitrage_delta} />
+        <TiltCell delta={p.model_tilt} />
       </div>
     </div>
   );

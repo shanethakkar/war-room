@@ -4,11 +4,11 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** Strategic pivot (user-approved): the draft-sim showed we're at
-~parity with ADP and the gap is structural (research confirms - see below), so we
-**reframed the product as an honest decision toolkit** and shipped it: FastAPI
-`/board` + a polished **dark Next.js draft board** (calibrated intervals, tiers,
-format-aware VOR, ADP arbitrage radar). Screenshot-verified. Next: user's call.
+**Current focus:** The board now ships a **validated edge**: a market-anchored
+blend (ADP 0.70 / baseline 0.20 / bayesian 0.10) that out-drafts pure-ADP
+drafting in six-season simulations (**win rate 0.564 vs 0.50**, fresh-seed
+confirmed) — while our pure model alone loses (0.40). UI reframed accordingly
+(Board rank + model Tilt). Full pipeline + interface shipped and verified.
 **Last updated:** 2026-07-10
 
 ---
@@ -85,6 +85,36 @@ reverse these.
   CLAUDE.md's Next.js; used Tailwind v3 (stable, and the frontend-ui-dark-ts skill's
   dark tokens drop in) rather than fighting v4 config on Windows. API on a spare
   port in dev if 8000/3000 are taken; CORS allows any localhost port.
+- **(2026-07-11) THE BOARD IS NOW A MARKET-ANCHORED BLEND — the first validated
+  edge.** Triggered by the user challenging McBride at overall #3 (pure VOR's
+  elite-TE premium) and asking whether ADP should be the spine. Tested blending
+  our VOR rank with ADP rank on the draft-sim, extended to 2019–2024 (fetched
+  2019/2020 FFC ADP):
+  - **2-way sweep** (w = model weight): pure model 0.40, pure ADP 0.50 (null
+    checks out), optimum **w=0.30 -> 0.546**; LOSO picks w=0.30 in every fold,
+    **honest estimate 0.548**. Bates-Granger forecast-combination theory gives
+    w*≈0.42 from rank errors — same ballpark, sim optimum lower because the
+    sim penalizes our cross-position allocation.
+  - **Fancier schemes all LOSE:** round-dependent weights (≈0.53–0.55),
+    position-specific weights (0.52–0.53), and within-position reordering with
+    ADP macro structure (0.33–0.44 — our within-position ordering, conditioned
+    on ADP's structure, is *worse* than ADP's own). The blend's value is
+    classic forecast combination (error averaging), not superior ordering.
+    Lookback-4 model input also blends worse (0.527). Robust to draft-noise
+    assumptions (0.532–0.554 at noise 3–9 picks).
+  - **3-way ensemble wins: baseline 0.20 / bayesian 0.10 / ADP 0.70 -> 0.564**
+    on a FRESH seed at n=500 (pre-registered confirmation; better than 2-way in
+    5/6 seasons). The bayesian model ties the baseline solo but adds value as a
+    diverse third forecast. (Fixed a real bug en route: bayesian fits crashed
+    when no player had >=3 training seasons, e.g. projecting 2019.)
+  - **Shipped:** `src/decision/blend.py` (2-way core + aux ensemble), service
+    ranks boards by the blend (3-way when pymc available, else 2-way),
+    `draft_sim --blend W` gates future changes on the shipped ranking. Frontend:
+    default sort = Board (blended), "Arbitrage" reframed as **Tilt** (where the
+    models nudge a player from market). McBride: #3 -> #20 (ADP ~29, tilt +11).
+  - Superflex blend is thinner (2-way 0.51; 3-way untested) — noted, not oversold.
+  - **Scoreboard now: 0.50 pure ADP -> 0.564 blended.** Win rate = share of our
+    6 teams finishing top-half by actual optimal-lineup points, 12-team drafts.
 - **(2026-07-10) The v1 Bayesian model does NOT beat the baseline; baseline stays
   default** (constraint #4). Head-to-head backtest 2021–2024 (redraft PPR):
   - Ranking: rank corr 0.708 (baseline 0.710) — a tie; beat-ADP +0.047 (baseline
@@ -369,3 +399,9 @@ reverse these.
   tiers, format-aware VOR, ADP arbitrage radar). Research + the superflex draft-sim
   (0.40) confirmed beating ADP with open data is low-probability; value is the
   transparent, calibrated toolkit, not a market-beating claim.
+- **2026-07-11** — **First validated edge shipped: the market-anchored blend.**
+  User challenged McBride #3 + questioned pure-model ranking vs ADP; analysis
+  (6-season sweep, LOSO, Bates-Granger, variant tests, fresh-seed confirmation)
+  landed on ADP 0.70 / baseline 0.20 / bayesian 0.10 -> draft-sim win rate
+  **0.564 vs 0.50** pure ADP. Board reranked by the blend; "Arbitrage" reframed
+  as model Tilt; `draft_sim --blend` gates future changes. McBride #3 -> #20.

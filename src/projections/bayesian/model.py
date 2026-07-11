@@ -175,15 +175,21 @@ def fit_model(
             dims=("pred", "pos"),
         )
         tau = pm.HalfNormal("tau", 2.0)
-        u = pm.Deterministic(
-            "u", tau * pm.Normal("u_z", 0.0, 1.0, dims="player"), dims="player"
-        )
+        # With a short training history no player may qualify for a random
+        # effect (e.g. projecting 2019 from a 2016-start panel); everyone then
+        # pools to their position and u drops out of the model entirely.
+        if established:
+            u = pm.Deterministic(
+                "u", tau * pm.Normal("u_z", 0.0, 1.0, dims="player"), dims="player"
+            )
+            u_contrib = u[u_safe] * u_mask  # 0 for pooled players
+        else:
+            u_contrib = 0.0
         gamma0 = pm.Normal("gamma0", np.log(3.0), 0.5, dims="pos")
         gamma1 = pm.Normal("gamma1", 0.0, 0.5)
         nu = pm.Gamma("nu", alpha=2.0, beta=0.1)
 
         contrib = (x * beta.T[pos_idx]).sum(axis=1)
-        u_contrib = u[u_safe] * u_mask  # 0 for pooled (non-established) players
         mu = alpha[pos_idx] + contrib + u_contrib
         sigma = pm.math.exp(gamma0[pos_idx] + gamma1 * x[:, _PREV_PPG])
         pm.StudentT("y", nu=nu, mu=mu, sigma=sigma, observed=y)
@@ -200,10 +206,15 @@ def fit_model(
         )
 
     post = idata.posterior
+    alpha_draws = _stack(post, "alpha", ("pos",))
     return FitResult(
-        alpha=_stack(post, "alpha", ("pos",)),
+        alpha=alpha_draws,
         beta=_stack(post, "beta", ("pred", "pos")),
-        u=_stack(post, "u", ("player",)),
+        u=(
+            _stack(post, "u", ("player",))
+            if established
+            else np.zeros((alpha_draws.shape[0], 0))
+        ),
         tau=_stack(post, "tau", ()),
         gamma0=_stack(post, "gamma0", ("pos",)),
         gamma1=_stack(post, "gamma1", ()),
