@@ -104,7 +104,8 @@ export default function Page() {
         (~2/week)</span>, lifting points-based playoff odds from 50% to ~57% —
         but the edge is year-dependent: it won clearly in 2021–2023 and{" "}
         <span className="text-bad">underperformed the market in 2019 and 2024</span>.
-        A multi-season tilt, not a guarantee. <span className="text-good">Tilt</span>{" "}
+        With six seasons of history we estimate an ~83% chance the edge is real —
+        a multi-season tilt, not a guarantee. <span className="text-good">Tilt</span>{" "}
         shows where the models nudge a player from market; bars show the
         calibrated 80% floor–ceiling interval.
       </p>

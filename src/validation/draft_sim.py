@@ -198,6 +198,15 @@ def evaluate_pool(
     our_rank = _rank(pool["vor"].to_numpy().astype(float), descending=True)
     adp_rank = _rank(pool["adp"].to_numpy().astype(float), descending=False)
     n_players = len(pos_codes)
+    # Per-player draft noise from FFC's observed pick stdev when available (a
+    # consensus #1 barely moves; a round-9 flier swings +-15), floored so no
+    # pick is deterministic; uniform fallback otherwise. Applied symmetrically.
+    if "adp_stdev" in pool.columns:
+        noise_sd = (
+            pool["adp_stdev"].fill_null(NOISE_PICKS).to_numpy().astype(float)
+        ).clip(2.0, 25.0)
+    else:
+        noise_sd = np.full(n_players, NOISE_PICKS)
     caps = _caps(roster)
     slots = _lineup_slots(roster)
     order = _snake_order(n_teams, rounds)
@@ -208,8 +217,8 @@ def evaluate_pool(
     for _ in range(n_sims):
         our_mask = np.zeros(n_teams, dtype=bool)
         our_mask[rng.choice(n_teams, half, replace=False)] = True
-        our_pri = our_rank + rng.normal(0.0, NOISE_PICKS, n_players)
-        adp_pri = adp_rank + rng.normal(0.0, NOISE_PICKS, n_players)
+        our_pri = our_rank + rng.normal(0.0, noise_sd)
+        adp_pri = adp_rank + rng.normal(0.0, noise_sd)
         values = simulate_draft(
             pos_codes, actual, our_pri, adp_pri, our_mask, caps, slots, order, roster
         )
@@ -258,19 +267,28 @@ def build_pool(
     slots - a sim artifact worth ~100 phantom points. Unmatched DST/K get
     synthetic late ADP ordered by OUR model's VOR, which is the conservative
     choice: it gives ADP drafters our knowledge for free.
+
+    **Drafted busts stay in the pool at 0 points**: a market-drafted player who
+    never played cost his drafter a real pick; excluding him would erase draft
+    risk from the sim. ``adp_stdev`` rides along for per-player draft noise.
     """
     scored = scored_projection(panel, players, season, model=model, fmt_key=fmt_key)
     board = build_value_board(scored, get_format(fmt_key)).with_columns(
         norm_name_expr("player_name")
     )
-    adp = load_adp(season, fmt_key).select("norm_name", "position", "adp")
-    joined = board.join(
-        _actual_points(panel, season), on="player_id", how="inner"
-    ).join(
-        adp,
-        left_on=["norm_name", "position_group"],
-        right_on=["norm_name", "position"],
-        how="left",
+    adp = load_adp(season, fmt_key).select("norm_name", "position", "adp", "adp_stdev")
+    joined = (
+        board.join(_actual_points(panel, season), on="player_id", how="left")
+        .join(
+            adp,
+            left_on=["norm_name", "position_group"],
+            right_on=["norm_name", "position"],
+            how="left",
+        )
+        .with_columns(pl.col("actual_points").fill_null(0.0))
+        # Keep: anyone with an ADP (drafted, even if they never played) plus
+        # anyone who actually produced. Undrafted no-shows are irrelevant.
+        .filter(pl.col("adp").is_not_null() | (pl.col("actual_points") > 0.0))
     )
     matched = joined.filter(pl.col("adp").is_not_null())
     max_adp = float(matched.select(pl.col("adp").max()).item() or 200.0)

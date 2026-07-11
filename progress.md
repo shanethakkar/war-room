@@ -156,6 +156,29 @@ reverse these.
      Per-season is the honest part: 2021-2023 strong (+76..+110, 66-74%
      top-half), 2020 flat, **2019 -19 and 2024 -64 (36% top-half)** — the edge
      is a multi-season tilt with real down-year risk, and the UI says so.
+- **(2026-07-11) BACKTESTER ACCURACY AUDIT** (user asked "are we certain it's
+  accurate?"). Two more inaccuracies found and FIXED in `draft_sim`:
+  1. **Drafted busts now stay in the pool at 0 points** (before, an ADP-20
+     player who never played vanished — erasing draft risk). Effect small in
+     practice (FFC year-end ADP already drops most preseason casualties; 0-5
+     busts/season) but correct.
+  2. **Per-player draft noise from FFC `adp_stdev`** (clipped [2, 25]) replaces
+     uniform sigma=6 — consensus firsts barely move, late fliers swing wide.
+  Re-validated: null 0.497 ✓; shipped 3-way **0.531** (unchanged from 0.533) —
+  the edge does not depend on either simplification.
+  **Statistical honesty:** 6 seasons is the sample. Season-bootstrap 90% CI on
+  the shipped win rate: **[0.476, 0.584]; P(edge > null) ~= 83%** — probably
+  real, not proven. Stated on the board.
+  **Known remaining limitations** (accepted or queued):
+  - Season-total optimal-lineup scoring, no weekly lineups/H2H schedule/playoffs
+    (weeks 15-17) — the biggest realism gap; a weekly H2H simulator from cached
+    `player_stats_week` is the queued upgrade (also the only way to measure what
+    the calibrated intervals are worth).
+  - Actuals scored in reference PPR even for custom-scoring gates (fix when
+    custom-league gating matters; components are in the panel).
+  - No waivers/in-season churn (sim overweights late-round accuracy somewhat).
+  - FFC ADP is mock-draft consensus (noisiest late, and the basis of our
+    "market is better at K" finding).
 - **(2026-07-11) The edge, in human terms — SUPERSEDED by the realistic-sim
   numbers below the next entry.** Original naive-bot measurement (kept for the
   record; solo-user sim: ONE blend drafter vs 11 ADP drafters, 600 drafts/season,
