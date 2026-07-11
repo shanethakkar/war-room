@@ -115,6 +115,19 @@ reverse these.
   - Superflex blend is thinner (2-way 0.51; 3-way untested) — noted, not oversold.
   - **Scoreboard now: 0.50 pure ADP -> 0.564 blended.** Win rate = share of our
     6 teams finishing top-half by actual optimal-lineup points, 12-team drafts.
+- **(2026-07-11) The edge, in human terms** (solo-user sim: ONE blend drafter vs
+  11 ADP drafters, 600 drafts/season, 2019–2024, random draft slot):
+  - **+51 points/season vs league average** (~3.0/week over 17 weeks; roughly
+    half an extra H2H win/season under typical weekly variance).
+  - **Average points-based finish 5.56 vs the 6.5 null**; top-half (playoff)
+    odds **61.3% vs 50%**; top-3 **33.6% vs 25%**; most points in league
+    **11.7% vs 8.3%**.
+  - **Draft-capital translation:** adjacent early rounds differ by ~15–40 actual
+    points, so +51 pts/season ≈ turning 2–3 mid picks into picks a round earlier.
+  - **Variance honesty:** year-dependent — 2022 +130, 2021/2023 ~+81, but
+    2019/2024 ~flat. A consistent tilt, not a guarantee. Solo edge (+51) ≈
+    6v6 margin (+52), so the edge doesn't shrink when shared.
+  - Footer on the board now states these numbers plainly.
 - **(2026-07-10) The v1 Bayesian model does NOT beat the baseline; baseline stays
   default** (constraint #4). Head-to-head backtest 2021–2024 (redraft PPR):
   - Ranking: rank corr 0.708 (baseline 0.710) — a tie; beat-ADP +0.047 (baseline

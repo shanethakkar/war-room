@@ -97,12 +97,14 @@ export default function Page() {
       <p className="mt-4 max-w-3xl text-xs leading-relaxed text-text-muted">
         <span className="font-medium text-text-secondary">How this board works.</span>{" "}
         The ranking anchors to market ADP with a validated minority tilt from our
-        open-data models (an ensemble weighted ~70% market / 30% model). In
-        six-season draft simulations this blend out-drafts pure-ADP drafting
-        (win rate ≈0.56 vs 0.50) — while our pure model alone does not, so{" "}
-        <span className="text-good">Tilt</span> shows where the models nudge a
-        player from market, not a claim to outsmart it. Bars show the calibrated
-        80% floor–ceiling interval.
+        open-data models (~70% market / 30% model ensemble). In six-season draft
+        simulations vs a 12-team league of ADP drafters, this board averaged{" "}
+        <span className="text-text-secondary">+51 points a season (~3/week)</span>,
+        lifting points-based playoff odds from 50% to ~61% and an average finish
+        from 6.5 to 5.6 — a real tilt, not a guarantee (two of six seasons were
+        flat). <span className="text-good">Tilt</span> shows where the models
+        nudge a player from market; bars show the calibrated 80% floor–ceiling
+        interval.
       </p>
     </main>
   );
