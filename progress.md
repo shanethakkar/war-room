@@ -256,6 +256,32 @@ reverse these.
   late ±{8,15}, plus ONE labeled beyond-observed "home-league folklore"
   scenario at 2x; herding calibrated to per-phase dispersion ceilings
   (R1-3 ~3, R4-8 ~6.5, R9-15 ~12.5 picks).
+- **(2026-07-12) STAGE 1 RESULTS — room-awareness pays, but only in strongly
+  biased rooms, and the online estimator works far better than predicted**
+  (`src/validation/room_sim.py`; paired vs board, 2019-2024, 150 sims/scenario,
+  herding calibrated within Stage-0 ceilings):
+  | scenario | oracle-DP | estimator-DP |
+  |---|---|---|
+  | control (unbiased) | -12.3 | -12.7 |
+  | QB -4 picks (typical) | -8.8 | -7.7 |
+  | **QB -8 picks** | **+36.3** | **+23.9** |
+  | **RB -8 picks** | **+49.3** | **+38.5** |
+  | K/DST -12 / -24 | -3.3 / +4.1 | -2.2 / +1.0 |
+  | folklore QB -16 | +44.5 | +37.9 |
+  - **Kill-gate: survived** (fails at ±4, passes strongly at ±8 - inside the
+    grounded mid-draft range). **Demotion gate: passed easily** - the estimator
+    captures 66-85% of oracle, refuting the pre-registered "learning arrives
+    too late" concern: exploitable decisions happen mid-draft, by which point
+    ~8-12 observed picks suffice under shrinkage.
+  - **But always-on room-awareness is bad**: the -12/season control cost means
+    the shippable design must be GATED (stay on board unless estimated bias is
+    large and confident). Adaptive-policy test run separately (below).
+  - **K/DST bias is unexploitable** (~0): their value curves are too flat for
+    timing to matter - reaching rooms just hand you fallers.
+  - **RUN QUESTION ANSWERED: never join a run.** JOIN loses -10.9 (mild
+    herding) and -21.6 (strong) vs staying on the board. Fade the run, harvest
+    the fallers - now evidence-backed, and exactly what the shipped board
+    policy already does by default.
 - **(2026-07-12) PHASE A VERDICT: sequencing policies do NOT beat disciplined
   board-following — the hypothesis is falsified, and the finding is the value.**
   Tested paired (identical opponents/noise/slot per sim), selection layer held
