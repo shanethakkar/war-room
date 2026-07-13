@@ -282,6 +282,24 @@ reverse these.
     herding) and -21.6 (strong) vs staying on the board. Fade the run, harvest
     the fallers - now evidence-backed, and exactly what the shipped board
     policy already does by default.
+  - **GATED ADAPTIVE POLICY (the Stage-2 candidate) validates cleanly.** v1
+    gate (threshold on the SHRUNK estimate) was miscalibrated - a true bias of
+    8 never crosses a shrunk threshold of 6 before ~24 observations - so it
+    stayed inert at +-8 (+1.6) while folklore-16 already showed the shape
+    (+54.0, BETTER than always-on: gating protects the early picks). v2 gate
+    (unshrunk mean >= 5 picks, n >= 8 observations):
+    | room | adaptive v2 | vs always-on estimator |
+    |---|---|---|
+    | control | **+0.2** (free) | -12.7 |
+    | QB -4 (typical) | +4.5 | -7.7 |
+    | QB -8 | **+33.9** (94% of oracle) | +23.9 |
+    | RB -8 | +14.5 | +38.5 |
+    | folklore QB -16 | **+64.8** (beats the oracle) | +37.9 |
+    Strictly dominant: silent and costless in normal rooms, captures most of
+    the value when the room provably deviates, and BEATS even the oracle in
+    extreme rooms because it keeps early picks on the board and switches only
+    once evidence accumulates. **Stage-1 verdict: PASS - Stage 2 (room-pace
+    detector + gated in-draft guidance) is green-lit pending user approval.**
 - **(2026-07-12) PHASE A VERDICT: sequencing policies do NOT beat disciplined
   board-following — the hypothesis is falsified, and the finding is the value.**
   Tested paired (identical opponents/noise/slot per sim), selection layer held

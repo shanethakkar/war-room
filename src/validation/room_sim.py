@@ -58,9 +58,11 @@ RUN_COUNT = 3
 JOIN_MAX_REACH = 24
 # Adaptive gating: switch from board to room-aware DP only when the estimated
 # positional bias is big AND confidently observed (the control-room DP cost of
-# ~-12/season must not be paid in normal rooms).
-ADAPT_MIN_SHIFT = 6.0
-ADAPT_MIN_OBS = 6
+# ~-12/season must not be paid in normal rooms). Gate on the UNSHRUNK mean:
+# thresholding the shrunk estimate double-counts caution (a true bias of 8
+# never crosses a shrunk threshold of 6 until ~24 observations - too late).
+ADAPT_MIN_SHIFT = 5.0
+ADAPT_MIN_OBS = 8
 
 BIAS_SCENARIOS: dict[str, dict[str, float]] = {
     "control": {},
@@ -198,9 +200,10 @@ def run_room_draft(
                     est_sum / np.maximum(est_n, 1) * est_n / (est_n + K_SHRINK),
                     0.0,
                 )
+                raw_mean = est_sum[:4] / np.maximum(est_n[:4], 1)
                 triggered = bool(
                     np.any(
-                        (np.abs(est_shift[:4]) >= ADAPT_MIN_SHIFT)
+                        (np.abs(raw_mean) >= ADAPT_MIN_SHIFT)
                         & (est_n[:4] >= ADAPT_MIN_OBS)
                     )
                 )
