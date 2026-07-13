@@ -23,17 +23,21 @@ export function nextMyPick(
 
 /**
  * P(player is still on the board at overall pick `pick`), modeling his actual
- * draft position as Normal(adp, stdev). FFC's observed per-player stdev feeds
- * this; floored so nothing reads as a false certainty.
+ * draft position as Normal(adp, stdev), CONDITIONAL on being available at
+ * `currentPick`. The conditioning matters mid-draft: a faller with ADP 15
+ * sitting on the board at pick 30 is very much alive, not "0%".
  */
 export function survivalProb(
   adp: number | null,
   stdev: number | null | undefined,
   pick: number,
+  currentPick = 1,
 ): number | null {
   if (adp === null || adp === undefined) return null;
   const sd = Math.max(stdev ?? 8, 2);
-  return normCdf((adp - pick) / sd);
+  const pFuture = normCdf((adp - pick) / sd);
+  const pNow = Math.max(normCdf((adp - currentPick) / sd), 1e-9);
+  return Math.min(pFuture / pNow, 1);
 }
 
 function normCdf(z: number): number {

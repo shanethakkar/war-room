@@ -8,9 +8,10 @@ import {
   Segmented,
   TiltCell,
 } from "@/components/atoms";
-import { RosterPanel } from "@/components/roster";
+import { CliffPanel, RosterPanel } from "@/components/roster";
 import { type BoardResponse, type Player, fetchBoard } from "@/lib/api";
-import { type DraftPicks, nextMyPick, survivalProb } from "@/lib/draft";
+import { type DraftPicks, myPickNumbers, nextMyPick, survivalProb } from "@/lib/draft";
+import { positionalCliffs } from "@/lib/strategy";
 
 const FORMATS = [
   { value: "redraft_ppr", label: "PPR" },
@@ -93,6 +94,22 @@ export default function Page() {
   const currentOverall = Object.keys(picks).length + 1;
   const nextPick = draft ? nextMyPick(currentOverall, slot, TEAMS) : null;
   const nextRound = nextPick !== null ? Math.ceil(nextPick / TEAMS) : null;
+  const pickAfter = draft
+    ? (myPickNumbers(slot, TEAMS).find((p) => nextPick !== null && p > nextPick) ??
+      null)
+    : null;
+  const cliffs = useMemo(
+    () =>
+      draft
+        ? positionalCliffs(
+            players.filter((p) => !picks[p.player_id]),
+            currentOverall,
+            nextPick,
+            pickAfter,
+          )
+        : [],
+    [draft, players, picks, currentOverall, nextPick, pickAfter],
+  );
   const mine = useMemo(
     () =>
       history
@@ -255,6 +272,7 @@ export default function Page() {
                   draft={draft}
                   state={picks[p.player_id]}
                   nextPick={nextPick}
+                  currentPick={currentOverall}
                   onTake={() => mark(p.player_id, "taken")}
                   onMine={() => mark(p.player_id, "mine")}
                 />
@@ -262,7 +280,15 @@ export default function Page() {
           </div>
         </div>
         {draft && (
-          <RosterPanel format={format} mine={mine} nextPick={nextPick} round={nextRound} />
+          <div className="w-60 shrink-0 space-y-4">
+            <CliffPanel cliffs={cliffs} />
+            <RosterPanel
+              format={format}
+              mine={mine}
+              nextPick={nextPick}
+              round={nextRound}
+            />
+          </div>
         )}
       </div>
 
@@ -354,6 +380,7 @@ function Row({
   draft,
   state,
   nextPick,
+  currentPick,
   onTake,
   onMine,
 }: {
@@ -362,6 +389,7 @@ function Row({
   draft: boolean;
   state?: "taken" | "mine";
   nextPick: number | null;
+  currentPick: number;
   onTake: () => void;
   onMine: () => void;
 }) {
@@ -435,7 +463,11 @@ function Row({
       {draft && (
         <div className="text-right">
           <AvailCell
-            prob={nextPick !== null ? survivalProb(p.adp, p.adp_stdev, nextPick) : null}
+            prob={
+              nextPick !== null
+                ? survivalProb(p.adp, p.adp_stdev, nextPick, currentPick)
+                : null
+            }
           />
         </div>
       )}

@@ -2,7 +2,46 @@
 
 import clsx from "clsx";
 import { fillRoster } from "@/lib/draft";
+import type { Cliff } from "@/lib/strategy";
 import { POS_BAR } from "./atoms";
+
+export function CliffPanel({ cliffs }: { cliffs: Cliff[] }) {
+  if (cliffs.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-border bg-neutral-bg2/60 p-4">
+      <h2 className="text-sm font-semibold text-text-primary">Cost of waiting</h2>
+      <p className="mt-0.5 text-[11px] leading-snug text-text-muted">
+        Expected best available at your next pick, per position.
+      </p>
+      <ul className="mt-2 space-y-1.5">
+        {cliffs.map((c) => (
+          <li key={c.pos} className="flex items-center gap-2 text-sm">
+            <span
+              className={clsx(
+                "h-4 w-[3px] shrink-0 rounded-full",
+                POS_BAR[c.pos] ?? "bg-white/10",
+              )}
+            />
+            <span className="num w-8 text-xs font-semibold text-text-secondary">
+              {c.pos}
+            </span>
+            <span className="num flex-1 truncate text-xs text-text-muted">
+              {Math.round(c.bestNow)} → {Math.round(c.expectedAtNext)}
+            </span>
+            <span
+              className={clsx(
+                "num text-xs font-semibold tabular-nums",
+                c.drop >= 25 ? "text-bad" : c.drop >= 10 ? "text-pos-te" : "text-text-muted",
+              )}
+            >
+              −{Math.round(c.drop)}
+            </span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
 
 export function RosterPanel({
   format,
@@ -19,8 +58,8 @@ export function RosterPanel({
   const needs = slots.filter((s) => !s.player).map((s) => s.label);
 
   return (
-    <aside className="w-60 shrink-0">
-      <div className="sticky top-6 rounded-xl border border-border bg-neutral-bg2/60 p-4">
+    <aside>
+      <div className="rounded-xl border border-border bg-neutral-bg2/60 p-4">
         <div className="flex items-baseline justify-between">
           <h2 className="text-sm font-semibold text-text-primary">My roster</h2>
           {nextPick !== null ? (

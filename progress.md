@@ -179,6 +179,60 @@ reverse these.
   - No waivers/in-season churn (sim overweights late-round accuracy somewhat).
   - FFC ADP is mock-draft consensus (noisiest late, and the basis of our
     "market is better at K" finding).
+- **(2026-07-12) STRATEGY LAYER — the plan (user-approved).** Insight: draft
+  *sequencing* is underserved. Taking the top board player every round ignores
+  opportunity cost — if RB24 ~= RB22 but QB drops off a cliff before your next
+  pick, the RB pick costs you the QB tier (user's framing; the industry calls it
+  VONA, "value over next available", and admits it's impractical to compute live:
+  you must predict opponents' picks in <60s). Research: VONA is decades old
+  (FantasyPros/Subvertadown explainers); hobbyist MCTS drafters exist and beat
+  greedy in toy tests — but NOBODY validates strategy against historical
+  outcomes. We uniquely can: survival curves from per-player ADP stdev +
+  calibrated projections + the artifact-hunted 6-season sim with title-rate
+  metrics. **Hypothesis: the sequencing edge exceeds the selection edge (+2-3pp),
+  because it exploits structure (positional cliffs, snake geometry, ADP-following
+  opponents) rather than out-predicting the market on players.**
+  - **Phase A**: cliff curves (E[best available] per position at my next picks,
+    via conditional survival probabilities), marginal-value pick ranking
+    (points - E[best at position at my next pick]), live in draft mode; sim
+    validation of the greedy-marginal policy vs the current board-following.
+  - **Phase B**: full-plan DP over remaining picks (receding horizon) + risk
+    knob (EV / ceiling / floor from intervals) + objective study: which
+    objective maximizes playoff rate vs title rate — measured, not assumed.
+  - **Phase C**: strategy zoo (Zero-RB, Hero-RB, late-QB, early-TE benchmarked
+    across seasons/formats), superflex deep-dive, MCTS cross-check of the DP.
+  - Known risks, stated upfront: sim opponents and product survival model share
+    the ADP-following assumption (mitigate: reactive-opponent stress tests);
+    6-season confidence ceiling; noisy late-round ADP (soft-pedal late plans).
+- **(2026-07-12) PHASE A VERDICT: sequencing policies do NOT beat disciplined
+  board-following — the hypothesis is falsified, and the finding is the value.**
+  Tested paired (identical opponents/noise/slot per sim), selection layer held
+  constant, 2019–2024:
+  - **Greedy VONA** (one-step marginal value, the industry's textbook answer):
+    **-45 pts/season**. Traced failure: drafts kickers in round 7 — slow-decay
+    positions look free one step out; the forfeited round-7 WR is invisible.
+  - **Full-plan DP** (receding-horizon assignment of positions to all remaining
+    picks): beats its own PROJECTED objective (+40..+70 projected pts/draft) but
+    **loses on actuals (-10 pts/season mean, swings +102 to -88 by season)**.
+    Four value functions tried: raw model points (re-leverages model bias:
+    drafted Kelce over Tyreek), 80/20 market-anchored, pure market curve (slot
+    geometry only), and historical draft-capital curves. None consistent.
+  - **Why (the insight):** (1) sequencing trades on tier-DIFFERENCE estimates,
+    whose signal-to-noise is worse than player levels - and we already know we
+    don't beat the market on levels; (2) in a market-driven room, needs-aware
+    best-available IS near-optimal sequencing: following the board captures
+    every faller, while any position plan forfeits fallers elsewhere; (3) the
+    real "strategy" value (don't take QB2 early, fill starters by the end) is
+    already enforced by the board policy's needs/caps discipline.
+  - **What ships from Phase A:** the strategy math (`src/decision/strategy.py`:
+    conditional survival, expected-best-available, cliffs, DP planner - kept
+    for research + Phase B/C reuse), the paired validator
+    (`src/validation/strategy_sim.py`), the **"Cost of waiting" cliff panel**
+    in draft mode (descriptive insight for a human weighing a reach - explicitly
+    NOT an auto-policy), and a conditional-survival fix to the Avail column (a
+    faller on the board mid-draft is not "0%"). Phases B/C re-scoped: the
+    objective study (EV vs ceiling) may still matter for HOW to break ties, but
+    position-plan optimization is dead on this evidence.
 - **(2026-07-12) Weekly H2H simulator REJECTED (user challenge upheld).**
   Simulating H2H schedules adds zero-mean matchup noise that favors no strategy
   and would only degrade the power of a 6-season sample. The valid kernel of the
@@ -508,6 +562,12 @@ reverse these.
   landed on ADP 0.70 / baseline 0.20 / bayesian 0.10 -> draft-sim win rate
   **0.564 vs 0.50** pure ADP. Board reranked by the blend; "Arbitrage" reframed
   as model Tilt; `draft_sim --blend` gates future changes. McBride #3 -> #20.
+- **2026-07-12** — **Phase A (strategy layer) complete — with a falsified
+  hypothesis.** Built the full VONA/cliff/DP machinery and a paired validator;
+  sequencing policies lose to disciplined board-following (greedy -45, DP -10
+  pts/season) for well-understood reasons now documented. Shipped the honest
+  subset: the "Cost of waiting" cliff panel (descriptive), conditional-survival
+  Avail fix, and the strategy engine kept for research.
 - **2026-07-12** — **Draft-day core shipped.** The board is now a live draft
   tool: draft mode (mark taken/mine, undo, persistent across refresh), my-roster
   panel with needs, and per-player "survives to my next pick" odds from FFC's
