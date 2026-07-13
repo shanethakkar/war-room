@@ -18,6 +18,7 @@ export type Player = {
   points_high: number;
   vor: number;
   adp: number | null;
+  adp_stdev?: number | null;
   adp_market_rank: number | null;
   model_tilt: number | null;
 };

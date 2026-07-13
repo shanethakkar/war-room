@@ -45,6 +45,7 @@ _OUTPUT_COLS = (
     "points_high",
     "vor",
     "adp",
+    "adp_stdev",
     "adp_market_rank",
     "model_tilt",
 )

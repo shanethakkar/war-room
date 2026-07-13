@@ -55,8 +55,11 @@ def blend_with_market(
     ``board_rank`` (blended order, 1 = best) and ``model_tilt`` (market rank -
     board rank; positive = the models moved the player up from market).
     """
+    adp_cols = ["norm_name", "position", "adp"] + (
+        ["adp_stdev"] if "adp_stdev" in adp.columns else []
+    )
     with_adp = board.with_columns(norm_name_expr("player_name")).join(
-        adp.select("norm_name", "position", "adp"),
+        adp.select(adp_cols),
         left_on=["norm_name", "position_group"],
         right_on=["norm_name", "position"],
         how="left",

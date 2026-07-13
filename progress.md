@@ -179,6 +179,15 @@ reverse these.
   - No waivers/in-season churn (sim overweights late-round accuracy somewhat).
   - FFC ADP is mock-draft consensus (noisiest late, and the basis of our
     "market is better at K" finding).
+- **(2026-07-12) Weekly H2H simulator REJECTED (user challenge upheld).**
+  Simulating H2H schedules adds zero-mean matchup noise that favors no strategy
+  and would only degrade the power of a 6-season sample. The valid kernel of the
+  idea — **weekly lineup re-scoring + deterministic all-play expected wins**
+  (captures bench/injury-cover depth value and consistency-vs-boom/bust, which
+  season-total optimal lineups cannot see) — is **backlogged**, to be built only
+  if a depth-related modeling question ever needs adjudicating. Validation is
+  adequate and honest as-is (0.531, ~83% confidence). Next effort goes to the
+  product: the draft-day core.
 - **(2026-07-11) The edge, in human terms — SUPERSEDED by the realistic-sim
   numbers below the next entry.** Original naive-bot measurement (kept for the
   record; solo-user sim: ONE blend drafter vs 11 ADP drafters, 600 drafts/season,
@@ -377,6 +386,15 @@ reverse these.
   and frontend). Sim upgraded to needs-aware drafting + 15 rounds + full DST/K
   pools; blend recalibrated on it (see decisions log). 9 new special/format
   tests + blend market-pinning test.
+- [x] **Draft-day core** (frontend): draft mode with click-to-mark-taken /
+  ＋-to-mark-mine, hide-drafted, undo/reset, localStorage persistence per
+  (season, format) — imperative single-writer persistence (a reactive
+  save-effect lost state to StrictMode double-mounts; caught by a reload test);
+  my-roster panel (greedy slot fill incl. FLEX/SFLX, needs list, next-pick
+  indicator with snake math); **Avail column** = P(player survives to your next
+  pick) from Normal(adp, FFC per-player stdev) — `adp_stdev` added to the
+  `/board` payload. All 5 format presets in the UI. Playwright-verified
+  (12-pick draft simulated, persistence across reload).
 - [x] Interface layer: **FastAPI `/board`** (`src/api/main.py` + `service.py`) serving
   the value board + intervals + arbitrage per season/format (cached; lazy-imports
   the pymc path), and a **polished dark Next.js draft board** (`frontend/`): season
@@ -490,6 +508,11 @@ reverse these.
   landed on ADP 0.70 / baseline 0.20 / bayesian 0.10 -> draft-sim win rate
   **0.564 vs 0.50** pure ADP. Board reranked by the blend; "Arbitrage" reframed
   as model Tilt; `draft_sim --blend` gates future changes. McBride #3 -> #20.
+- **2026-07-12** — **Draft-day core shipped.** The board is now a live draft
+  tool: draft mode (mark taken/mine, undo, persistent across refresh), my-roster
+  panel with needs, and per-player "survives to my next pick" odds from FFC's
+  pick-variance data. Weekly H2H sim rejected as metric noise (user challenge
+  upheld); weekly all-play re-scoring backlogged.
 - **2026-07-11** — **DST/K + flexible league formats shipped; sim made realistic;
   blend numbers honestly revised.** Every scoring/roster rule is now a knob
   (pass_td, PPR, TE premium, K distances, DST brackets, team count, 2QB), the
