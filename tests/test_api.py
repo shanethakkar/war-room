@@ -30,6 +30,7 @@ def test_formats_endpoint() -> None:
         "redraft_standard",
         "superflex",
         "two_qb",
+        "pigskin17",
     } == set(formats)
 
 

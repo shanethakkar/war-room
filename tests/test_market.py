@@ -107,3 +107,65 @@ def test_spearman_helper() -> None:
     df = pl.DataFrame({"a": [1.0, 2.0, 3.0, 4.0], "b": [10.0, 20.0, 30.0, 40.0]})
     assert _spearman(df, "a", "b") == 1.0
     assert _spearman(df.head(2), "a", "b") is None  # too few rows
+
+
+def test_load_adp_ttl_refreshes_current_year_only(
+    monkeypatch: Any, tmp_path: Any
+) -> None:
+    """Completed seasons cache forever; the draft-year board expires after the
+    TTL; and a failed refetch serves the stale cache instead of raising."""
+    import os
+    import time
+
+    import src.ingest.adp as adp_mod
+    import src.ingest.cache as cache_mod
+
+    monkeypatch.setattr(cache_mod, "CACHE_DIR", tmp_path)
+    monkeypatch.setattr(adp_mod.nfl, "get_current_season", lambda roster=False: 2025)
+    calls: list[int] = []
+
+    def fake_fetch(year: int, fmt: Any, teams: int) -> pl.DataFrame:
+        calls.append(year)
+        return _normalize(
+            [
+                {
+                    "name": "A Receiver",
+                    "position": "WR",
+                    "team": "DAL",
+                    "adp": 2.0,
+                    "stdev": 0.5,
+                    "times_drafted": 10,
+                }
+            ],
+            year,
+            "ppr",
+            teams,
+        )
+
+    monkeypatch.setattr(adp_mod, "fetch_adp", fake_fetch)
+
+    # Completed season: one fetch, then cached forever.
+    adp_mod.load_adp(2024, "redraft_ppr")
+    adp_mod.load_adp(2024, "redraft_ppr")
+    assert calls == [2024]
+
+    # Draft-year board: cached while fresh...
+    adp_mod.load_adp(2026, "redraft_ppr")
+    adp_mod.load_adp(2026, "redraft_ppr")
+    assert calls == [2024, 2026]
+
+    # ...but refetched once older than the TTL.
+    path = cache_mod.cache_path("adp2_ppr_12_2026")
+    aged = time.time() - (adp_mod.ADP_TTL_DAYS + 1) * 86400
+    os.utime(path, (aged, aged))
+    adp_mod.load_adp(2026, "redraft_ppr")
+    assert calls == [2024, 2026, 2026]
+
+    # Stale beats broken: a failing refetch serves the stale cache.
+    def boom(year: int, fmt: Any, teams: int) -> pl.DataFrame:
+        raise RuntimeError("FFC down")
+
+    monkeypatch.setattr(adp_mod, "fetch_adp", boom)
+    os.utime(path, (aged, aged))
+    out = adp_mod.load_adp(2026, "redraft_ppr")
+    assert out.height == 1

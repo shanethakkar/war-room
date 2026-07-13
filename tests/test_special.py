@@ -112,6 +112,20 @@ def test_ffc_slug_resolution() -> None:
     assert ffc_slug(customize(REDRAFT_PPR, qb=2)) == "2qb"
     assert ffc_slug(customize(REDRAFT_PPR, rec=0.5)) == "half-ppr"
     assert ffc_slug(customize(REDRAFT_PPR, rec=0.0)) == "standard"
+    # Registered presets without an explicit FFC mapping resolve by their rules.
+    assert ffc_slug("pigskin17") == "2qb"
+    with pytest.raises(KeyError):
+        ffc_slug("not_a_format")
+
+
+def test_pigskin17_league_preset() -> None:
+    fmt = get_format("pigskin17")
+    assert fmt.roster.teams == 10
+    assert fmt.roster.qb == 2
+    assert fmt.roster.superflex == 0  # true 2QB, not superflex
+    assert fmt.roster.bench == 7
+    assert fmt.scoring.pass_td == 6.0
+    assert fmt.scoring.rec == 1.0
 
 
 # ----------------------------------------------------------------- projection

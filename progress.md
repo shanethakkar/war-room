@@ -4,14 +4,13 @@ Living status. Update this as work happens: move tasks between Todo / Doing /
 Done, and record every meaningful decision or gotcha in the log.
 
 **Current phase:** Phase 1 — Pre-draft research
-**Current focus:** DST/K + fully flexible league formats are wired in
-(backend-first, user-directed), and the draft-sim was made substantially more
-realistic in the process (needs-aware drafting, 15 rounds, full DST/K pools) —
-which **revised the blend edge downward, honestly**: 3-way blend (ADP 0.80 /
-baseline 0.10 / bayesian 0.10, DST/K pinned to market) wins **0.533 vs a 0.507
-null**; earlier 0.564 was partly a sim artifact (see decisions log). UI numbers
-updated to match.
-**Last updated:** 2026-07-10
+**Current focus:** The league-aware push. The user's 11-year ESPN league
+(291362 "pigskin17") is ingested as room-behavior data; its format ships as a
+preset (10-team true-2QB PPR, 6-pt pass TD) end-to-end; and its measured
+signature (QBs ~12 picks LATE vs the 2QB market, 10/10 years) prices at
+**+48.4 pts/season for the gated adaptive policy** in its own format. Next:
+Stage-2 warm-started room guidance in draft mode (green-lit, awaiting user go).
+**Last updated:** 2026-07-13
 
 ---
 
@@ -338,6 +337,66 @@ reverse these.
   if a depth-related modeling question ever needs adjudicating. Validation is
   adequate and honest as-is (0.531, ~83% confidence). Next effort goes to the
   product: the draft-day core.
+- **(2026-07-12) ESPN LEAGUE-HISTORY INGESTION APPROVED (user-directed) —
+  constraint #3 amended.** The user's own ESPN league draft history (league
+  291362 "pigskin17", 11 seasons) is ingested as **draft-BEHAVIOR data for
+  room-bias priors** — the same firewall as ADP: it NEVER feeds projections.
+  No ESPN projections/rankings/anything else; nflverse remains the only
+  projection source. The league is private: auth via `espn_s2` + `SWID`
+  browser cookies in the gitignored repo-root `.env` (never committed;
+  espn_s2 expires after weeks-months — re-grab from browser if pulls 401).
+  Feasibility verified 2026-07-12: all 11 drafts (2015–2025) pull cleanly
+  from ESPN's fantasy v3 API (`leagueHistory` endpoint for pre-2018), 170
+  picks each, snake, no keepers.
+- **(2026-07-12) LEAGUE 291362 ROOM SIGNATURE MEASURED — a real, stable,
+  decade-long QB-late bias.** League format (stable all 11 years, read from
+  the API): **true 2QB** (QB x2, RB x2, WR x2, TE, FLEX, DST, K, 7 bench),
+  full PPR, **6-pt passing TDs**, 10 teams. Methodology gotcha worth
+  remembering: the first pass benchmarked against FFC's PPR board and showed
+  QB "+48 picks early, 10/10 years" — that was the WRONG YARDSTICK (any 2QB
+  room drafts QBs early); against FFC's 10-team **2QB** boards (2015–2024,
+  90–97% pick match via nflverse `espn_id` + name norm) the signature flips:
+  **QB −11.8 picks LATE (median −6.3), late 10/10 years**, trending stronger
+  recently (2022–24: −20/−13/−15); RB −4.7, TE +2.0, WR +0.5, K +3.3
+  (~neutral). Because 6-pt pass TDs argue QBs should go EARLIER than the
+  standard 2QB market, the exploitable gap (correct timing vs room timing)
+  is wider than the raw −12. This is the warm-start prior for the Stage-2
+  adaptive gate. 2025's draft is pulled but unbenchmarked: **FFC's historical
+  API has a hole at year=2025** (status=Error, 0 players, every format/size;
+  2015–2024 and current-2026 all work) — retry occasionally. FFC 2026 mock
+  ADP is already live (boards refresh continuously in draft season — don't
+  trust a one-time cache pull for the current year).
+- **(2026-07-13) LEAGUE PRICING (step 3 of the league-aware push): the
+  measured pigskin17 signature is worth ~+48 pts/season to the gated adaptive
+  policy — Stage-2 warm-start guidance is strongly justified.** Priced in the
+  league's OWN format for the first time (`room_sim --league`: 10-team
+  true-2QB pools with 6-pt pass TDs, 17 rounds, 150 paired sims/scenario,
+  2019–2024). Paired deltas vs board-following, pts/season:
+  | room | oracle | always-on estimator | gated adaptive |
+  |---|---|---|---|
+  | control (unbiased) | +20.0 | +19.5 | +3.7 |
+  | QB late 6 | +41.7 | +48.8 | +41.0 |
+  | QB late 12 | +32.5 | +39.4 | **+54.6** |
+  | **pigskin (measured)** | +35.0 | +29.2 | **+48.4** (se 4.1) |
+  Readings, in order of importance:
+  1. **At the measured room signature the gated adaptive policy pays +48.4
+     pts/season** — larger than Stage 1's qb_early_8 result (+33.9) because a
+     true-2QB roster makes QB timing the highest-stakes allocation decision,
+     and this room hands QB value to whoever waits correctly. It again BEATS
+     the oracle (as in Stage-1 folklore): board-following early + switching
+     on evidence outperforms full-knowledge DP from pick 1.
+  2. **NEW vs Stage 1: in 2QB even the unbiased room rewards room-aware DP**
+     (control oracle/estimator ~+20 where 1QB PPR showed −12). Planning the
+     second QB slot against survival odds is real value in this format, not
+     just bias exploitation. The gated policy deliberately leaves most of
+     that on the table in control rooms (+3.7, near-free) in exchange for
+     never paying the always-on cost — still the right shippable default,
+     but a format-conditional "DP assist" is a legitimate future experiment.
+  3. Caveats: simulated opponents replay the measured shift (the 2025 draft
+     replay would be the real-room validation — parked on FFC's 2025 gap);
+     board baseline = the shipped blend policy in the pigskin17 format.
+  **Verdict: step-4 (Stage-2 room-aware guidance, warm-started from the
+  league-history prior) is green-lit pending user review of these numbers.**
 - **(2026-07-11) The edge, in human terms — SUPERSEDED by the realistic-sim
   numbers below the next entry.** Original naive-bot measurement (kept for the
   record; solo-user sim: ONE blend drafter vs 11 ADP drafters, 600 drafts/season,
@@ -480,7 +539,9 @@ reverse these.
   `load_draft_picks(seasons=...)` (since 1980). Both cached.
 - ~~ADP source (design assumed Sleeper).~~ **RESOLVED (2026-07-10):** Sleeper has
   no ADP -> moved to Fantasy Football Calculator (see decisions log). Note: FFC
-  returns Error for year 2025 (gap); 2019–2024 + 2026 are available.
+  returns Error for year 2025 (gap, confirmed again 2026-07-12 across all
+  formats/sizes); 2015–2024 + current-2026 are available (2qb + ppr verified
+  back to 2015 at 10 teams).
 - **Rookie projections sit well below market ADP** (arbitrage board shows rookies
   as the biggest fades). Our draft-capital prior is conservative and ignores
   landing spot / college profile. Is that alpha (market overdrafts rookies) or a
@@ -500,6 +561,16 @@ reverse these.
 ### Phase 1 — Pre-draft research
 
 **Todo**
+- [ ] **Step 4 of the league-aware push (green-lit by the +48.4 pricing,
+  awaiting user go):** Stage-2 room-aware guidance in draft mode, warm-started
+  from the league-history prior (`espn_league.to_room_shift`) — league-adjusted
+  survival odds from pick 1, gated advice (unshrunk mean >= 5 picks, n >= 8),
+  live estimator updates the prior during the draft.
+- [ ] 2025 retrospective replay (War Room in Team Thakkar's seat, scored on
+  2025 actuals) — parked until FFC publishes 2025 boards (retry occasionally).
+- [ ] Format-conditional "DP assist" experiment: 2QB control rooms reward
+  room-aware DP ~+20 even unbiased (league-pricing finding #2) — test a
+  format-gated (not bias-gated) planner before dismissing.
 - [ ] Aging curves: position-specific age adjustment (delta method); add + re-backtest (must beat no-aging).
 - [ ] Tune shrinkage `k` constants + recency decay against the ADP backtest.
 - [ ] Investigate rookie conservatism vs ADP (biggest arbitrage fades); does it help or hurt the backtest?
@@ -509,6 +580,21 @@ reverse these.
 - (empty)
 
 **Done**
+- [x] **League-aware push, steps 1–3 (user-approved 2026-07-12; landed
+  2026-07-13).** (1) `pigskin17` league preset (10-team true-2QB PPR, 6-pt
+  pass TD, 7 bench) registered as a format config, served by `/board`, PIG17
+  tab in the UI (Playwright-verified: 2QB roster panel, 10-slot selector,
+  QB-heavy board on live 2026 2QB ADP), `ffc_slug` resolves any registered
+  preset, and current-draft-year ADP caches now expire after 3 days
+  (stale-beats-broken fallback). (2) `src/ingest/espn_league.py`: cached
+  draft-history ingest for the user's private ESPN league (cookies from the
+  gitignored `.env`), pure bias math (`pick_deltas`/`positional_bias`/
+  `to_room_shift`), CLI reporting the room signature — 1,870 picks over 11
+  drafts cached; QB −11.8 picks late, 10/10 years. (3) League pricing mode
+  (`room_sim --league`): 2QB pools via format-aware `build_pool`,
+  teams/rounds-parameterized `evaluate_scenario`, measured-signature scenario
+  — gated adaptive worth **+48.4 pts/season** (see decisions log). 93/93
+  tests (8 new), ruff + mypy `--strict` + frontend tsc green.
 - [x] Project planning: methodology, architecture, constraints, roadmap (see `design.md`).
 - [x] Baseline projections (`src/projections/baseline`) + per-format scoring
   (`src/formats/score.py`): recency-weighted recent form -> shrinkage regression
@@ -617,6 +703,14 @@ reverse these.
 
 ## Changelog
 
+- **2026-07-13** — **The app now knows the user's real league.** ESPN league
+  291362 ("pigskin17", 11 drafts, 2015–2025) ingested as room-behavior data
+  (constraint #3 scoped exception, user-approved): `pigskin17` preset
+  end-to-end (backend registry -> PIG17 tab, 10-team snake math, 2QB roster
+  panel), ADP freshness TTL for draft-season boards, and the measured room
+  signature (QB ~12 picks late, 10/10 years vs the 2QB market) priced in the
+  league's own format: **gated adaptive room-awareness is worth +48.4
+  pts/season** — Stage-2 warm-start guidance green-lit, awaiting user go.
 - **2026-07-10** — Project scaffold landed. uv project + `src/` skeleton +
   tooling (ruff/mypy/pytest) all green; FastAPI app and format registry live.
   Repo initialized and pushed to `github.com/shanethakkar/war-room`.

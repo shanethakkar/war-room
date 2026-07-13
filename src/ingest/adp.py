@@ -14,17 +14,23 @@ Cached to Parquet like every other data source; offline-reproducible thereafter.
 from __future__ import annotations
 
 import argparse
+import time
 
 import httpx
+import nflreadpy as nfl
 import polars as pl
 
+from src.formats import FORMATS
 from src.formats.base import FormatConfig
-from src.ingest.cache import read_table, write_table
+from src.ingest.cache import cache_path, read_table, write_table
 from src.names import norm_name_expr
 
 _FFC_URL = "https://fantasyfootballcalculator.com/api/v1/adp/{ffc_format}"
 _HEADERS = {"User-Agent": "war-room (github.com/shanethakkar/war-room)"}
 DEFAULT_TEAMS = 12
+# Current-draft-year mock ADP moves all summer; a cached board older than this
+# is refetched (completed seasons are immutable and never expire).
+ADP_TTL_DAYS = 3.0
 
 # Preset format keys -> Fantasy Football Calculator market slugs.
 FORMAT_TO_FFC: dict[str, str] = {
@@ -89,17 +95,21 @@ def _canonical_dst(df: pl.DataFrame) -> pl.DataFrame:
 def ffc_slug(fmt: FormatConfig | str) -> str:
     """The nearest FFC ADP market for a format (preset key or custom config).
 
-    Custom configs resolve by their rules: 2+ startable QBs -> the 2QB market;
-    otherwise by the reception value (full / half / standard PPR).
+    Configs resolve by their rules: 2+ startable QBs -> the 2QB market;
+    otherwise by the reception value (full / half / standard PPR). String keys
+    without an explicit mapping (e.g. league presets) resolve via the format
+    registry, so any registered format gets an ADP market for free.
     """
     if isinstance(fmt, str):
         try:
             return FORMAT_TO_FFC[fmt]
         except KeyError:
-            known = sorted(FORMAT_TO_FFC)
-            raise KeyError(
-                f"No FFC ADP mapping for format {fmt!r}; known: {known}."
-            ) from None
+            if fmt not in FORMATS:
+                known = sorted(set(FORMAT_TO_FFC) | set(FORMATS))
+                raise KeyError(
+                    f"No FFC ADP mapping for format {fmt!r}; known: {known}."
+                ) from None
+            fmt = FORMATS[fmt]
     if fmt.roster.qb + fmt.roster.superflex >= 2:
         return "2qb"
     if fmt.scoring.rec >= 0.75:
@@ -160,6 +170,22 @@ def fetch_adp(
     return _normalize(payload["players"], year, slug, teams)
 
 
+def _is_stale(name: str, year: int) -> bool:
+    """True when a cached CURRENT-year board is older than the TTL.
+
+    Completed seasons are immutable; but mock-draft ADP for the season being
+    drafted moves continuously (FFC's board is a rolling window), so trusting a
+    one-time pull from June on draft night would be silently wrong.
+    """
+    # `get_current_season()` lags the draft year until kickoff (July 2026 ->
+    # 2025), so ">=" keeps both the upcoming-draft year AND the in-season year
+    # fresh; every completed season stays immutable.
+    if year < nfl.get_current_season():
+        return False
+    age_s = time.time() - cache_path(name).stat().st_mtime
+    return age_s > ADP_TTL_DAYS * 86400.0
+
+
 def load_adp(
     year: int,
     fmt: FormatConfig | str = "redraft_ppr",
@@ -171,15 +197,20 @@ def load_adp(
 
     ``fmt`` is a preset key or a full FormatConfig (custom leagues resolve to
     the nearest FFC market via ``ffc_slug``). v2 cache name: includes the
-    PK/DEF position mapping.
+    PK/DEF position mapping. Current-draft-year boards expire after
+    ``ADP_TTL_DAYS`` (stale beats broken: if the refetch fails, the stale
+    cache is served rather than raising).
     """
     name = f"adp2_{ffc_slug(fmt)}_{teams}_{year}"
-    if not refresh:
-        try:
+    cached = cache_path(name).exists()
+    if not refresh and cached and not _is_stale(name, year):
+        return _canonical_dst(read_table(name))
+    try:
+        df = fetch_adp(year, fmt, teams)
+    except (httpx.HTTPError, RuntimeError):
+        if cached:
             return _canonical_dst(read_table(name))
-        except FileNotFoundError:
-            pass
-    df = fetch_adp(year, fmt, teams)
+        raise
     write_table(name, df)
     return _canonical_dst(df)
 

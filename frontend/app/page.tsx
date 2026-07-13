@@ -19,6 +19,8 @@ const FORMATS = [
   { value: "redraft_standard", label: "Std" },
   { value: "superflex", label: "SFLX" },
   { value: "two_qb", label: "2QB" },
+  // League preset registered server-side: 10-team true-2QB PPR, 6pt pass TD.
+  { value: "pigskin17", label: "PIG17" },
 ];
 const SEASONS = [2026, 2025, 2024, 2023];
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE", "DST", "K"];
@@ -28,7 +30,9 @@ const SORTS = [
   { value: "adp", label: "Market" },
   { value: "tilt", label: "Tilt" },
 ];
-const TEAMS = 12;
+/** League size drives all snake math; presets are 12-team unless listed here. */
+const FORMAT_TEAMS: Record<string, number> = { pigskin17: 10 };
+const teamsFor = (format: string) => FORMAT_TEAMS[format] ?? 12;
 
 export default function Page() {
   const [season, setSeason] = useState(2026);
@@ -70,12 +74,13 @@ export default function Page() {
       const s = raw ? JSON.parse(raw) : null;
       setPicks(s?.picks ?? {});
       setHistory(s?.history ?? []);
-      if (s?.slot) setSlot(s.slot);
+      // Clamp so a 12-team slot never survives a switch to a smaller league.
+      setSlot((prev) => Math.min(s?.slot ?? prev, teamsFor(format)));
     } catch {
       setPicks({});
       setHistory([]);
     }
-  }, [storageKey]);
+  }, [storageKey, format]);
 
   const persist = (p: DraftPicks, h: string[], sl: number) => {
     try {
@@ -91,11 +96,12 @@ export default function Page() {
     [players],
   );
 
+  const teams = teamsFor(format);
   const currentOverall = Object.keys(picks).length + 1;
-  const nextPick = draft ? nextMyPick(currentOverall, slot, TEAMS) : null;
-  const nextRound = nextPick !== null ? Math.ceil(nextPick / TEAMS) : null;
+  const nextPick = draft ? nextMyPick(currentOverall, slot, teams) : null;
+  const nextRound = nextPick !== null ? Math.ceil(nextPick / teams) : null;
   const pickAfter = draft
-    ? (myPickNumbers(slot, TEAMS).find((p) => nextPick !== null && p > nextPick) ??
+    ? (myPickNumbers(slot, teams).find((p) => nextPick !== null && p > nextPick) ??
       null)
     : null;
   const cliffs = useMemo(
@@ -209,7 +215,7 @@ export default function Page() {
         <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg border border-brand/25 bg-brand-subtle/40 px-3 py-2 text-sm">
           <span className="num tabular-nums text-text-secondary">
             Pick <span className="font-semibold text-text-primary">#{currentOverall}</span>
-            <span className="text-text-muted"> · R{Math.ceil(currentOverall / TEAMS)}</span>
+            <span className="text-text-muted"> · R{Math.ceil(currentOverall / teams)}</span>
           </span>
           <label className="flex items-center gap-1.5 text-text-secondary">
             my slot
@@ -218,7 +224,7 @@ export default function Page() {
               onChange={(e) => changeSlot(Number(e.target.value))}
               className="rounded bg-neutral-bg2 px-1.5 py-0.5 text-sm text-text-primary ring-1 ring-inset ring-border"
             >
-              {Array.from({ length: TEAMS }, (_, i) => i + 1).map((n) => (
+              {Array.from({ length: teams }, (_, i) => i + 1).map((n) => (
                 <option key={n} value={n}>
                   {n}
                 </option>

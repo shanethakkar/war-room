@@ -21,7 +21,7 @@ import polars as pl
 
 from src.decision.board import build_value_board
 from src.formats import FORMATS, get_format
-from src.formats.base import RosterConfig, ScoringConfig
+from src.formats.base import FormatConfig, RosterConfig, ScoringConfig
 from src.formats.score import score_special
 from src.ingest.adp import load_adp
 from src.ingest.cache import read_table
@@ -257,7 +257,11 @@ def _actual_points(panel: pl.DataFrame, season: int) -> pl.DataFrame:
 
 
 def build_pool(
-    panel: pl.DataFrame, players: pl.DataFrame, season: int, model: str, fmt_key: str
+    panel: pl.DataFrame,
+    players: pl.DataFrame,
+    season: int,
+    model: str,
+    fmt_key: str | FormatConfig,
 ) -> pl.DataFrame:
     """Draftable pool for ``season``: our VOR board ∩ ADP ∩ actual outcome.
 
@@ -272,11 +276,12 @@ def build_pool(
     never played cost his drafter a real pick; excluding him would erase draft
     risk from the sim. ``adp_stdev`` rides along for per-player draft noise.
     """
-    scored = scored_projection(panel, players, season, model=model, fmt_key=fmt_key)
-    board = build_value_board(scored, get_format(fmt_key)).with_columns(
-        norm_name_expr("player_name")
+    fmt = get_format(fmt_key) if isinstance(fmt_key, str) else fmt_key
+    scored = scored_projection(panel, players, season, model=model, fmt_key=fmt)
+    board = build_value_board(scored, fmt).with_columns(norm_name_expr("player_name"))
+    adp = load_adp(season, fmt, teams=fmt.roster.teams).select(
+        "norm_name", "position", "adp", "adp_stdev"
     )
-    adp = load_adp(season, fmt_key).select("norm_name", "position", "adp", "adp_stdev")
     joined = (
         board.join(_actual_points(panel, season), on="player_id", how="left")
         .join(

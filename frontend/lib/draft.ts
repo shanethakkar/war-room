@@ -4,7 +4,7 @@ export type PickState = "taken" | "mine";
 export type DraftPicks = Record<string, PickState>;
 
 /** Overall pick numbers for a slot in a snake draft (1-indexed). */
-export function myPickNumbers(slot: number, teams: number, rounds = 16): number[] {
+export function myPickNumbers(slot: number, teams: number, rounds = 18): number[] {
   const picks: number[] = [];
   for (let r = 0; r < rounds; r++) {
     picks.push(r % 2 === 0 ? r * teams + slot : (r + 1) * teams - slot + 1);
@@ -67,7 +67,8 @@ export function starterSlots(format: string): RosterSlot[] {
   ];
   if (format === "superflex")
     slots.push({ label: "SFX", eligible: ["QB", "RB", "WR", "TE"] });
-  if (format === "two_qb") slots.push({ label: "QB", eligible: ["QB"] });
+  if (format === "two_qb" || format === "pigskin17")
+    slots.push({ label: "QB", eligible: ["QB"] });
   slots.push({ label: "DST", eligible: ["DST"] }, { label: "K", eligible: ["K"] });
   return slots;
 }

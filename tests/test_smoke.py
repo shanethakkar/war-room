@@ -43,6 +43,7 @@ def test_preset_formats_registered() -> None:
         "redraft_standard",
         "superflex",
         "two_qb",
+        "pigskin17",
     }
 
 

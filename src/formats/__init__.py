@@ -51,9 +51,27 @@ TWO_QB = FormatConfig(
     roster=RosterConfig(qb=2),
 )
 
+# A real league as a config file - the pattern CLAUDE.md promises ("adding a
+# format = a config file, not code branches"). Settings read from the ESPN API
+# on 2026-07-12 and stable across all 11 league years; every other scoring rule
+# matches the full-PPR defaults (verified against the league's scoringItems).
+PIGSKIN17 = FormatConfig(
+    key="pigskin17",
+    name="pigskin17 (10-team 2QB PPR, 6pt pass TD)",
+    scoring=ScoringConfig(rec=1.0, pass_td=6.0),
+    roster=RosterConfig(teams=10, qb=2, bench=7),
+)
+
 FORMATS: dict[str, FormatConfig] = {
     fmt.key: fmt
-    for fmt in (REDRAFT_PPR, REDRAFT_HALF, REDRAFT_STANDARD, SUPERFLEX, TWO_QB)
+    for fmt in (
+        REDRAFT_PPR,
+        REDRAFT_HALF,
+        REDRAFT_STANDARD,
+        SUPERFLEX,
+        TWO_QB,
+        PIGSKIN17,
+    )
 }
 
 
@@ -76,6 +94,7 @@ __all__ = [
     "ScoringConfig",
     "customize",
     "get_format",
+    "PIGSKIN17",
     "REDRAFT_PPR",
     "REDRAFT_HALF",
     "REDRAFT_STANDARD",

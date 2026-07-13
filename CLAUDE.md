@@ -31,6 +31,10 @@ These are guardrails. Do not violate them without an explicit decision logged in
    projections. Everything projection-related must work fully offline from cached
    nflverse data. (Original plan was Sleeper-for-ADP, but Sleeper exposes no ADP;
    see the 2026-07-10 decision in `progress.md`. Still no FantasyPros/PFF/ESPN.)
+   One scoped exception (user-approved 2026-07-12): the user's OWN ESPN league's
+   draft history may be ingested as draft-**behavior** data for room-bias priors
+   — same firewall as ADP, never feeds projections; auth cookies live in the
+   gitignored `.env`. No other ESPN data, ever.
 4. **Ship the transparent baseline before the Bayesian model.** The pipeline must
    run end-to-end and backtest against ADP with a simple, non-Bayesian projection
    first. The PyMC layer is a swap-in that must prove it beats that baseline.
@@ -86,6 +90,9 @@ uv run python -m src.projections.run --season 2025
 
 # backtest + calibration + ADP benchmark
 uv run python -m src.validation.backtest --through 2024
+
+# pull the user's ESPN league draft history + report room bias (needs .env creds)
+uv run python -m src.ingest.espn_league --start 2015 --through 2025
 
 # tests
 uv run pytest

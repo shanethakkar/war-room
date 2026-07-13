@@ -74,6 +74,17 @@ BIAS_SCENARIOS: dict[str, dict[str, float]] = {
     "folklore_qb_16": {"QB": -16.0},
 }
 
+# The user's real room (ESPN league 291362), measured against FFC 10-team 2QB
+# ADP over 2015-2024 (`src.ingest.espn_league`): QBs go ~12 picks LATE (10/10
+# years), RBs mildly late, TE/K slightly early. Positive shift = later than
+# market (the negation of the measured `mean_early`; see `to_room_shift`).
+LEAGUE_SCENARIOS: dict[str, dict[str, float]] = {
+    "control": {},
+    "qb_late_6": {"QB": 6.0},
+    "qb_late_12": {"QB": 12.0},
+    "pigskin_measured": {"QB": 11.8, "RB": 4.7, "TE": -2.0, "WR": -0.5, "K": -3.3},
+}
+
 
 def _bias_shift(d: dict[str, np.ndarray], bias: dict[str, float]) -> np.ndarray:
     shift = np.zeros(len(d["pos"]))
@@ -270,6 +281,8 @@ def evaluate_scenario(
     noise_scale: float = 1.0,
     n_sims: int = 150,
     seed: int = 11,
+    teams: int = 12,
+    rounds: int = ROUNDS,
 ) -> dict[str, float]:
     """Mean paired delta vs 'board' per policy, pooled over seasons."""
     deltas: dict[str, list[float]] = {p: [] for p in policies if p != "board"}
@@ -277,14 +290,32 @@ def evaluate_scenario(
         rng = np.random.default_rng(seed)
         n = len(d["pos"])
         for _ in range(n_sims):
-            slot = int(rng.integers(1, 13))
+            slot = int(rng.integers(1, teams + 1))
             noise = rng.normal(0.0, np.clip(d["stdev"], 2.0, 25.0), n)
             base, _ = run_room_draft(
-                d, roster, slot, noise, "board", bias, herd_boost, noise_scale
+                d,
+                roster,
+                slot,
+                noise,
+                "board",
+                bias,
+                herd_boost,
+                noise_scale,
+                teams=teams,
+                rounds=rounds,
             )
             for policy in deltas:
                 mine, _ = run_room_draft(
-                    d, roster, slot, noise, policy, bias, herd_boost, noise_scale
+                    d,
+                    roster,
+                    slot,
+                    noise,
+                    policy,
+                    bias,
+                    herd_boost,
+                    noise_scale,
+                    teams=teams,
+                    rounds=rounds,
                 )
                 deltas[policy].append(mine - base)
     out: dict[str, float] = {}
@@ -335,12 +366,69 @@ def calibrate_dispersion(
     return out
 
 
+def _league_pricing(args: argparse.Namespace) -> None:
+    """Price the measured league signature in ITS OWN format (step 3 of the
+    league-aware push): 10-team true-2QB pools, 17 rounds, league scenarios,
+    oracle (= a perfect league-history prior) vs estimate vs adaptive gate."""
+    fmt = get_format("pigskin17")
+    teams = fmt.roster.teams
+    rounds = sum(
+        (
+            fmt.roster.qb,
+            fmt.roster.rb,
+            fmt.roster.wr,
+            fmt.roster.te,
+            fmt.roster.flex,
+            fmt.roster.superflex,
+            fmt.roster.dst,
+            fmt.roster.k,
+            fmt.roster.bench,
+        )
+    )
+    panel = read_table("feature_panel")
+    players = read_table("players")
+    seasons = list(range(args.start, args.through + 1))
+    pools = {
+        y: _prepare(build_pool(panel, players, y, "baseline", fmt)) for y in seasons
+    }
+    print(
+        f"[league] pigskin17 pricing: {teams}-team 2QB, {rounds} rounds, "
+        f"{args.sims} sims/scenario, seasons {seasons[0]}-{seasons[-1]}"
+    )
+    print("[league] paired deltas vs board, pts/season:")
+    for name, bias in LEAGUE_SCENARIOS.items():
+        m = evaluate_scenario(
+            pools,
+            fmt.roster,
+            ("board", "oracle", "estimate", "adaptive"),
+            bias,
+            n_sims=args.sims,
+            teams=teams,
+            rounds=rounds,
+        )
+        print(
+            f"  {name:17}"
+            f" oracle {m['oracle_delta']:+7.1f} (se {m['oracle_se']:.1f})"
+            f" | estimator {m['estimate_delta']:+7.1f} (se {m['estimate_se']:.1f})"
+            f" | adaptive {m['adaptive_delta']:+7.1f} (se {m['adaptive_se']:.1f})"
+        )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Stage 1: room-bias experiments.")
     parser.add_argument("--start", type=int, default=2019)
     parser.add_argument("--through", type=int, default=2024)
     parser.add_argument("--sims", type=int, default=150)
+    parser.add_argument(
+        "--league",
+        action="store_true",
+        help="Price the measured pigskin17 room signature instead of the "
+        "Stage-1 suite (2QB 10-team pools; needs the 2qb FFC boards cached).",
+    )
     args = parser.parse_args()
+    if args.league:
+        _league_pricing(args)
+        return
 
     panel = read_table("feature_panel")
     players = read_table("players")
