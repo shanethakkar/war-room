@@ -204,6 +204,58 @@ reverse these.
   - Known risks, stated upfront: sim opponents and product survival model share
     the ADP-following assumption (mitigate: reactive-opponent stress tests);
     6-season confidence ceiling; noisy late-round ADP (soft-pedal late plans).
+- **(2026-07-12) ROOM-BIAS RESEARCH PLAN — pressure-tested before committing
+  (user-directed).** Post-Phase-A brainstorm: naive points-BPA loses 5-160
+  pts/season to market-order drafting, so **VONA is real and worth ~100
+  pts/season - but the market's ADP order already contains it**. The surviving
+  hypothesis: VONA-style tools pay only against rooms that DEVIATE from market
+  timing (QB-early rooms, runs). Before building, we adversarially poked holes:
+  1. Naive archetype experiments are CIRCULAR (hand a DP the bias you injected
+     and it "wins" tautologically) -> must separate oracle (upper bound) from
+     estimator (sees only observed picks - the real product).
+  2. In-draft room-learning arrives too late: by round 5 you've seen ~6-10
+     picks per position (bias SE ~±3-4 picks vs biases of ~5-15) and rounds 1-4
+     decide the most value. Runs, specifically, ARE quickly detectable.
+  3. Run-reaction sign is unknown: join-the-run (VONA logic) vs fade-and-
+     harvest-fallers (sharp folklore + our own faller-capture findings) must be
+     measured, not assumed.
+  4. Board-following gets STRONGER in biased rooms for free (reaches create
+     fallers; the board hoovers them). Pre-registered prediction: oracle-DP
+     edge stays small except at extreme bias.
+  5. Archetype magnitudes would be folklore -> Stage 0 grounds them in FFC's
+     observed per-player pick dispersion (if rooms shifted positions 2+ rounds,
+     player stdevs would exceed what FFC shows).
+  6. Knob-tuning risk -> pre-registered kill-gates, all runs reported.
+  7. Product bar: decision-change rate x value per change, not just sim deltas.
+  8. First-order reactivity ALREADY ships (cliffs/Avail recompute on every real
+     pick); room-awareness is a second-order correction on top.
+  **Staged plan with kill-gates:** Stage 0 = ground bias/herding ranges from
+  FFC dispersion. Stage 1 = paired board / oracle-DP / estimator-DP across the
+  grounded bias sweep + the run join-vs-fade question; KILL if oracle gain
+  < ~15 pts/season at plausible bias, or demote to display-only if the
+  estimator captures < 1/3 of oracle. Stage 2 (conditional) = room-pace
+  indicator + adjusted cliffs, information-only. **Stated prior: ~25-30% that
+  Stage 2 ever builds; the likely deliverable is a verified answer to "what do
+  I do during a run" (probably: keep taking fallers).**
+- **(2026-07-12) STAGE 0 RESULTS — room-bias bounds from FFC dispersion**
+  (`src/validation/room_calibration.py`, redraft PPR 2019-2024, ~1,200
+  player-season observations):
+  | phase | player pick stdev (median) | -> room-bias upper bound |
+  |---|---|---|
+  | R1-3 | RB/WR 2.6-2.7, TE 3.9, QB 5.2 | **±0.2-0.4 rounds** |
+  | R4-8 | 5.8-8.7 across positions | ±0.5-0.7 rounds |
+  | R9-15 | 10.4-17.2 (TE loosest; K/DST 13-15) | ±0.9-1.4 rounds |
+  These are LOOSE upper bounds (they include within-room noise AND season-long
+  ADP drift; true systematic room bias is a fraction). **Implication: the
+  exploitable-bias budget is smallest exactly where sequencing value is highest
+  (rounds 1-3: at most ±3-5 picks), and largest where the value curve is flat
+  (rounds 9-15).** Envelope math puts the oracle ceiling near the Stage-1 kill
+  threshold. Prior on Stage 2 drops to ~15-20%. Caveat both ways: FFC mocks may
+  be tighter than home leagues (bound too low) but drift inflates the numbers
+  (bound too high). Stage-1 sweep grounded at: early ±{2,4} picks, mid ±{4,8},
+  late ±{8,15}, plus ONE labeled beyond-observed "home-league folklore"
+  scenario at 2x; herding calibrated to per-phase dispersion ceilings
+  (R1-3 ~3, R4-8 ~6.5, R9-15 ~12.5 picks).
 - **(2026-07-12) PHASE A VERDICT: sequencing policies do NOT beat disciplined
   board-following — the hypothesis is falsified, and the finding is the value.**
   Tested paired (identical opponents/noise/slot per sim), selection layer held
